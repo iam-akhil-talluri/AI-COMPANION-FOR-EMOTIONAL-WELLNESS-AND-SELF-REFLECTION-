@@ -54,3 +54,22 @@ The system is designed to:
 ### Monitoring
 
 *
+
+
+| Team Member | Primary Contributions |
+| Cynthia Lakshminarayanan | Requirements, Frontend & UX |
+| Akhil Sai Talluri | Backend, Database & Operational Logging |
+| Shaheed Campbell | Architecture, Integration & Deployment |
+| Emmanuel Kofi Mensah | AI & Conversational Functionality |
+| Korey Owens | QA, Analytics & Safety Validation |
+
+Copyright © 2026 [P05-01/ Shaheed Campbell, Cynthia Lakshminarayanan, Emmanuel Kofi Mensah, Korey Owens and Akhil Sai Talluri ]
+
+This project was collaboratively developed by the five members
+of the project team.
+
+Individual contributions are documented through Git commit history,
+project documentation, and repository history.
+
+All rights and use of the project are subject to Kennesaw State University
+, Capstone sponsor, and team agreements.
