@@ -56,6 +56,7 @@ BACKEND / AI INTEGRATION MAP
 
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
+import { sendMessageToBackend } from './services/chatService'
 
 //MY ANALYTICS: Prototype Sample Data
 //BACKEND INTEGRATION: replace with GET /analytics/me for the USer
@@ -650,7 +651,7 @@ function App() {
 
             <form
               className='message-form'
-              onSubmit={(event) => {
+              onSubmit={async (event) => {
                 event.preventDefault()
 
                 // Do not submit empty messages
@@ -686,47 +687,36 @@ function App() {
                 // Intended flow:
                 // React → FastAPI → Safety/Moderation → clear/concern/error
                 // ============================================================
-                setTimeout(() => {
+                try {
+                  const response = await sendMessageToBackend(userMessage)
 
-                  // Temporary result
-                  const safetyResult = 'clear' // Prototype only: change to'concern' or 'error' to view safety escalation and error fallback
-                  // BACKEND INTEGRATION:
-                  // Remove this hard-coded value and use the actual
-                  // safety/moderation API response.
-                  setSafetyStatus(safetyResult)
                   setSafetyChecking(false)
+                  setSafetyStatus(response.status)
 
-                  // If safety concern is detected
-                  if (safetyResult === 'concern') {
+                  if (response.status === 'concern') {
                     setCurrentScreen('support-resources')
                     return
                   }
 
-                  // If safety check fails
-                  if (safetyResult === 'error') {
-                    setSafetyStatus('error')
-                    setMessages((currentMessages) => currentMessages.slice(0, -1))
-                    setMessage(userMessage)
+                  if (response.status === 'error') {
                     setCurrentScreen('safety-error')
                     return
                   }
-                  //============================================================
-                  // AI BACKEND INTEGRATION:
-                  // This is currently a mock response.
-                  // When integrated, only a safety-approved message should be
-                  // sent to the conversational AI through FastAPI.
-                  // AI response: backend → React.
-                  // ============================================================
-                  // If message is clear, show AI response
+
                   setMessages((currentMessages) => [
                     ...currentMessages,
                     {
                       role: 'assistant',
-                      text: 'Is there something that happened today to make you feel like that?'
+                      text: response.message
                     }
                   ])
+                } catch (error) {
+                  console.error('Message request failed:', error)
 
-                }, 1000)
+                  setSafetyChecking(false)
+                  setSafetyStatus('error')
+                  setCurrentScreen('safety-error')
+                }
               }}
             >
 
@@ -1762,10 +1752,10 @@ function App() {
 
                 <div
                   className={`admin-log-item ${log.status === 'Warning'
-                      ? 'is-warning'
-                      : log.status === 'Error'
-                        ? 'is-error'
-                        : ''
+                    ? 'is-warning'
+                    : log.status === 'Error'
+                      ? 'is-error'
+                      : ''
                     }`}
                   key={index}
                 >
@@ -1935,7 +1925,7 @@ function App() {
 
             <form
               className='message-form'
-              onSubmit={(event) => {
+              onSubmit={async(event) => {
                 event.preventDefault()
 
                 // Do not submit empty messages
@@ -1967,126 +1957,52 @@ function App() {
                 setContinueMessage('')
 
 
-                // ============================================================
-                // START SAFETY CHECK
-                // ============================================================
-
+               // Start the message-processing request.
                 setContinueSafetyChecking(true)
+                setSafetyStatus('checking')
 
+                // BACKEND INTEGRATION:
+                // This service currently returns mock responses.
+                // Later, it will call FastAPI for safety screening,
+                // scope classification, and the AI response.
+                try {
+                  const response =
+                    await sendMessageToBackend(userMessage)
 
-                // ============================================================
-                // SAFETY BACKEND INTEGRATION:
-                //
-                // Replace this setTimeout prototype with a request
-                // to the FastAPI backend.
-                //
-                // Intended flow:
-                //
-                // React
-                //   ↓
-                // FastAPI
-                //   ↓
-                // Safety / Moderation Service
-                //   ↓
-                // clear / concern / error
-                //
-                // ============================================================
-
-                setTimeout(() => {
-
-                  // ----------------------------------------------------------
-                  // TEMPORARY PROTOTYPE RESULT
-                  // ----------------------------------------------------------
-                  // Change this to:
-                  //
-                  // 'clear'   → continue to AI response
-                  // 'concern' → go to support resources
-                  // 'error'   → go to safety error
-                  //
-                  // BACKEND INTEGRATION:
-                  // Replace this hard-coded value with the actual
-                  // safety API response.
-                  // ----------------------------------------------------------
-
-                  const safetyResult = 'clear'
-
-
-                  // Stop safety checking
                   setContinueSafetyChecking(false)
+                  setSafetyStatus(response.status)
 
-
-                  // ============================================================
-                  // SAFETY CONCERN
-                  // ============================================================
-
-                  if (safetyResult === 'concern') {
+                  // Safety concern: show support resources.
+                  if (response.status === 'concern') {
                     setCurrentScreen('support-resources')
                     return
                   }
 
-
-                  // ============================================================
-                  // SAFETY SERVICE ERROR
-                  // ============================================================
-
-                  if (safetyResult === 'error') {
+                  // Processing error: show the error screen.
+                  if (response.status === 'error') {
                     setCurrentScreen('safety-error')
                     return
                   }
 
-
-                  // ============================================================
-                  // AI BACKEND INTEGRATION
-                  // ============================================================
-                  //
-                  // The message has passed the safety check.
-                  //
-                  // Replace the mock response below with the response
-                  // returned by the conversational AI through FastAPI.
-                  //
-                  // Intended flow:
-                  //
-                  // Safety-approved message
-                  //        ↓
-                  // FastAPI
-                  //        ↓
-                  // Conversational AI
-                  //        ↓
-                  // AI response
-                  //        ↓
-                  // React
-                  //
-                  // ============================================================
-
+                  // Display either the scope redirect
+                  // or the wellness AI response.
                   setContinueMessages((currentMessages) => [
                     ...currentMessages,
                     {
                       role: 'assistant',
-                      text: 'Is there something that happened today to make you feel like that?'
+                      text: response.message
                     }
                   ])
+                } catch (error) {
+                  console.error(
+                    'Continue session request failed:',
+                    error
+                  )
 
-
-                  // ============================================================
-                  // DATABASE BACKEND INTEGRATION
-                  // ============================================================
-                  //
-                  // Save the user message and AI response to the
-                  // selected conversation session.
-                  //
-                  // Example future endpoint:
-                  //
-                  // POST /sessions/{session_id}/messages
-                  //
-                  // The backend should also record appropriate
-                  // safety/event metadata for analytics.
-                  //
-                  // Raw conversation content should not be exposed
-                  // in aggregate analytics.
-                  //
-                  // ============================================================
-
-                }, 1000)
+                  setContinueSafetyChecking(false)
+                  setSafetyStatus('error')
+                  setCurrentScreen('safety-error')
+                }
               }}
             >
 
@@ -2228,7 +2144,7 @@ function App() {
             <p className='support-message'>I'm unable to complete the safety check right now,
               so I can't safely continue the conversation.</p>
 
-            <p className='support-description'>You can try again, uuse a coping tool or end the session.</p>
+            <p className='support-description'>You can try again, use a coping tool or end the session.</p>
 
             {/* CRISIS LINK
                 Someone in distress during an outage still needs a way to reach help.
