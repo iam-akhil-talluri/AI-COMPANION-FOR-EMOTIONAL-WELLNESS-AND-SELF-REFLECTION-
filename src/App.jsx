@@ -1043,6 +1043,10 @@ function App() {
                   <button className='session-button'
                     onClick={() => {
                       setSelectedSession(session)
+
+                      // Clear messages from any previously selected session.
+                      setContinueMessages([])
+                      setContinueMessage('')
                       // BACKEND INTEGRATION:
                       // Load the selected session/messages with
                       // GET /sessions/{session_id}.
@@ -1925,7 +1929,7 @@ function App() {
 
             <form
               className='message-form'
-              onSubmit={async(event) => {
+              onSubmit={async (event) => {
                 event.preventDefault()
 
                 // Do not submit empty messages
@@ -1957,7 +1961,7 @@ function App() {
                 setContinueMessage('')
 
 
-               // Start the message-processing request.
+                // Start the message-processing request.
                 setContinueSafetyChecking(true)
                 setSafetyStatus('checking')
 
