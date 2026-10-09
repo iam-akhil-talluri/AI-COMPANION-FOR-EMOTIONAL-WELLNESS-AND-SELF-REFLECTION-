@@ -24,3 +24,4 @@ dist-ssr
 *.sw?
 
 src/App_complete.jsx
+src/App_full_working.jsx
