@@ -247,7 +247,22 @@ function App() {
   // BACKEND INTEGRATION:
   // Prototype/sample sessions only.
   // Replace this array with GET /sessions for the authenticated user.
+  const [journalText, setJournalText] = useState('')
+  const [journalSaved, setJournalSaved] = useState(false)
+  const [groundingStarted, setGroundingStarted] = useState(false)
 
+  const [copingUsage, setCopingUsage] = useState({
+    journaling: 0,
+    grounding: 0,
+    breathing: 0
+  })
+
+  function recordCopingUsage(tool) {
+    setCopingUsage((currentUsage) => ({
+      ...currentUsage,
+      [tool]: currentUsage[tool] + 1
+    }))
+  }
   const [conversationSessions, setConversationSessions] = useState([
     {
       id: 1,
@@ -812,7 +827,7 @@ function App() {
     )
   }
 
-   // REFLECTION PROMPT SCREEN
+  // REFLECTION PROMPT SCREEN
   if (currentScreen === 'reflection') {
     return (
       <div className='app'>
@@ -1205,9 +1220,7 @@ function App() {
 
               {/* BREATHING CONTROLS */}
               <div className='breathing-controls'>
-
                 {!breathingActive ? (
-
                   <button
                     className='primary-button'
                     type='button'
@@ -1226,6 +1239,7 @@ function App() {
                     className='secondary-button'
                     type='button'
                     onClick={() => {
+                      recordCopingUsage('breathing')
                       setBreathingActive(false)
                       setBreathingPhase('Inhale')
                       setBreathingCount(4)
@@ -1248,12 +1262,48 @@ function App() {
                 <strong>Reflection prompt</strong>
                 <p>What has been taking up most of your energy lately?</p>
               </div>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault()
+
+                  if (!journalText.trim()) return
+
+                  recordCopingUsage('journaling')
+                  setJournalText('')
+                  setJournalSaved(true)
+                }}
+              >
+                <textarea
+                  id='journal-entry'
+                  value={journalText}
+                  onChange={(event) => {
+                    setJournalText(event.target.value)
+                    setJournalSaved(false)
+                  }}
+                  placeholder='Write your thoughts here...'
+                  rows={4}
+                />
+
+                <button className='primary-button' type='submit'>
+                  Save Reflection Journal
+                </button>
+              </form>
+
+              {journalSaved && (
+                <p role='status'>
+                  Reflection recorded for this prototype.
+                </p>
+              )}
+
             </section>
 
-            {/*Grounding*/}
+            {/* Grounding */}
             <section className='coping-tool-section'>
               <h2>Grounding</h2>
-              <p>Bring your attention to the present moment by noticing what is around you</p>
+              <p>
+                Bring your attention to the present moment by noticing what is around you
+              </p>
+
               <div className='grounding-list'>
                 <div>
                   <strong>5</strong>
@@ -1275,6 +1325,32 @@ function App() {
                   <strong>1</strong>
                   <span>things you can notice about your breathing</span>
                 </div>
+              </div>
+
+              <div className='breathing-controls'>
+                {!groundingStarted ? (
+                  <button
+                    className='primary-button'
+                    type='button'
+                    onClick={() => {
+                      setGroundingStarted(true)
+                    }}
+                  >
+                    Start Grounding
+                  </button>
+                ) : (
+                  <button
+                    className='primary-button'
+                    type='button'
+                    onClick={() => {
+                      recordCopingUsage('grounding')
+                      setGroundingStarted(false)
+
+                    }}
+                  >
+                    Complete Grounding
+                  </button>
+                )}
               </div>
             </section>
           </section>
@@ -1353,7 +1429,23 @@ function App() {
   // The frontend is never the security boundary.
 
   if (currentScreen === 'analytics') {
-    const analytics = SAMPLE_ANALYTICS
+    const analytics = {
+  ...SAMPLE_ANALYTICS,
+  tools: [
+    {
+      name: 'Mindful Breathing',
+      completed: copingUsage.breathing
+    },
+    {
+      name: 'Journaling',
+      completed: copingUsage.journaling
+    },
+    {
+      name: 'Grounding',
+      completed: copingUsage.grounding
+    }
+  ]
+}
 
     const maxDayCount = Math.max(
       1,
