@@ -173,15 +173,11 @@ const SAMPLE_ADMIN_ANALYTICS = {
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState('login')
-  //const [currentScreen, setCurrentScreen] = useState('safety-error')
   const [adminLogin, setAdminLogin] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [userRole, setUserRole] = useState(null)
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState([])
-  const [reflectionMessage, setReflectionMessage] = useState('')
-  const [reflectionMessages, setReflectionMessages] = useState([])
-  const [reflectionSafetyChecking, setReflectionSafetyChecking] = useState(false)
   const [selectedSession, setSelectedSession] = useState(null)
   // BACKEND INTEGRATION:
   // selectedSession will eventually come from the authenticated user's
@@ -247,92 +243,26 @@ function App() {
   // BACKEND INTEGRATION:
   // Prototype/sample sessions only.
   // Replace this array with GET /sessions for the authenticated user.
-  const [journalText, setJournalText] = useState('')
-  const [journalSaved, setJournalSaved] = useState(false)
-  const [groundingStarted, setGroundingStarted] = useState(false)
-
-  const [copingUsage, setCopingUsage] = useState({
-    journaling: 0,
-    grounding: 0,
-    breathing: 0
-  })
-
-  function recordCopingUsage(tool) {
-    setCopingUsage((currentUsage) => ({
-      ...currentUsage,
-      [tool]: currentUsage[tool] + 1
-    }))
-  }
-  const [conversationSessions, setConversationSessions] = useState([
+  const conversationSessions = [
     {
       id: 1,
-      type: 'conversation',
       date: 'September 28, 2026',
       title: 'Work and daily stress',
-      prompt: 'What has been on your mind today?',
-      messageCount: 2,
-      messages: [
-        {
-          role: 'user',
-          text: 'I have been feeling stressed about work.'
-        },
-        {
-          role: 'assistant',
-          text: 'Would you like to explore what has been making work stressful?'
-        }
-      ]
+      messageCount: 8
     },
     {
       id: 2,
-      type: 'conversation',
       date: 'September 26, 2026',
       title: 'Thinking through a difficult situation',
-      prompt: 'What would you like to talk through today?',
-      messageCount: 2,
-      messages: [
-        {
-          role: 'user',
-          text: 'I have a difficult decision to make.'
-        },
-        {
-          role: 'assistant',
-          text: 'What feels most difficult about this decision?'
-        }
-      ]
+      messageCount: 12
     },
     {
       id: 3,
-      type: 'reflection',
       date: 'September 24, 2026',
       title: 'Reflection on the week',
-      prompt: 'What has felt important to you this week?',
-      messageCount: 2,
-      messages: [
-        {
-          role: 'user',
-          text: 'I felt overwhelmed this week.'
-        },
-        {
-          role: 'assistant',
-          text: 'What do you think contributed most to that feeling?'
-        }
-      ]
+      messageCount: 6
     }
-  ])
-
-  function updateSessionMessages(sessionId, updatedMessages) {
-    setConversationSessions((currentSessions) =>
-      currentSessions.map((session) =>
-        session.id === sessionId
-          ? {
-            ...session,
-            messages: updatedMessages,
-            messageCount: updatedMessages.length
-          }
-          : session
-      )
-    )
-  }
+  ]
 
   // SUPPORT BAR (shown on every screen except the support page itself)
   // SAFETY INTEGRATION:
@@ -352,8 +282,6 @@ function App() {
       Need support now? <strong>Get help</strong>
     </button>
   )
-
-
 
   // LOGIN SCREEN
   if (currentScreen === 'login') {
@@ -692,7 +620,7 @@ function App() {
 
               <div className='message assistant-message'>
                 <span className='message-label'>AI Companion</span>
-                <p>What would you like to talk about today?</p>
+                <p>{conversationStarter}</p>
               </div>
 
               {messages.map((item, index) => (
@@ -832,69 +760,30 @@ function App() {
     return (
       <div className='app'>
         {supportBar}
-
         <main className='reflection-page'>
-          <header className='reflection-header'>
-            <button
-              className='back-button'
-              onClick={() => setCurrentScreen('home')}
-            >
-              Back to Home
-            </button>
 
+          <header className='reflection-header'>
+            <button className='back-button'
+              onClick={() => setCurrentScreen('home')}>Back to Home</button>
             <h1>Reflection Prompt</h1>
           </header>
 
           <section className='reflection-card'>
-            <p className='reflection-intro'>
-              Take a moment for yourself.
-            </p>
+            <p className='reflection-intro'>Take a moment for yourself.</p>
 
             <div className='reflection-prompt-box'>
               <p>{reflectionPrompt}</p>
             </div>
 
             <div className='reflection-actions'>
-              <button
-                className='primary-button'
+              <button className='primary-button'
                 onClick={() => {
-                  // Create a session using the current prompt.
-                  const newSession = {
-                    id: Date.now(),
-                    type: 'reflection',
-                    date: new Date().toLocaleDateString('en-US', {
-                      month: 'long',
-                      day: 'numeric',
-                      year: 'numeric'
-                    }),
-                    title: `Reflection: ${reflectionPrompt}`,
-                    prompt: reflectionPrompt,
-                    messageCount: 0,
-                    messages: []
-                  }
+                  setConversationStarter(reflectionPrompt)
+                  setMessages([])
+                  setCurrentScreen('conversation')
+                }}> Use This Prompt</button>
 
-                  // Add the session to Conversation History.
-                  setConversationSessions((currentSessions) => [
-                    newSession,
-                    ...currentSessions
-                  ])
-
-                  // Select the new session.
-                  setSelectedSession(newSession)
-
-                  // Start with an empty reflection conversation.
-                  setReflectionMessages([])
-                  setReflectionMessage('')
-
-                  // Open Reflection Chat.
-                  setCurrentScreen('reflection-chat')
-                }}
-              >
-                Use This Prompt
-              </button>
-
-              <button
-                className='secondary-button'
+              <button className='secondary-button'
                 onClick={() => {
                   let newPrompt
 
@@ -910,187 +799,9 @@ function App() {
                   )
 
                   setReflectionPrompt(newPrompt)
-                }}
-              >
-                Give Me Another Prompt
-              </button>
+                }}>Give Me Another Prompt</button>
+
             </div>
-          </section>
-        </main>
-      </div>
-    )
-  }
-
-
-  // REFLECTION CHAT SCREEN
-  if (currentScreen === 'reflection-chat') {
-    return (
-      <div className='app'>
-        {supportBar}
-
-        <main className='conversation-page'>
-          <header className='conversation-header'>
-            <button
-              className='back-button'
-              type='button'
-              onClick={() => setCurrentScreen('reflection')}
-            >
-              Back to Reflection
-            </button>
-
-            <h1>Reflection Chat</h1>
-          </header>
-
-          <section className='conversation-card'>
-            <div className='conversation-notice'>
-              <strong>Guided self-reflection</strong>
-              <p>
-                Use this space to explore your thoughts and feelings.
-                This AI companion provides reflective, non-clinical support.
-                It does not provide diagnosis, medical advice or treatment
-                recommendations.
-              </p>
-            </div>
-
-            <div className='message-area'>
-              {/* Display the selected reflection prompt */}
-              <div className='message assistant-message'>
-                <span className='message-label'>Reflection Prompt</span>
-                <p>
-                  {selectedSession
-                    ? selectedSession.prompt
-                    : conversationStarter}
-                </p>
-              </div>
-
-              {/* Display reflection chat messages */}
-              {reflectionMessages.map((item, index) => (
-                <div
-                  key={index}
-                  className={
-                    item.role === 'user'
-                      ? 'message user-message'
-                      : 'message assistant-message'
-                  }
-                >
-                  <span className='message-label'>
-                    {item.role === 'user' ? 'You' : 'AI Companion'}
-                  </span>
-                  <p>{item.text}</p>
-                </div>
-              ))}
-
-              {reflectionSafetyChecking && (
-                <div className='message assistant-message'>
-                  <span className='message-label'>Safety Check</span>
-                  <p>Checking your message before continuing...</p>
-                </div>
-              )}
-            </div>
-
-            <form
-              className='message-form'
-              onSubmit={async (event) => {
-                event.preventDefault()
-
-                if (
-                  !reflectionMessage.trim() ||
-                  reflectionSafetyChecking
-                ) {
-                  return
-                }
-
-                const userMessage = reflectionMessage.trim()
-
-                const updatedMessages = [
-                  ...reflectionMessages,
-                  { role: 'user', text: userMessage }
-                ]
-
-                setReflectionMessages(updatedMessages)
-                setReflectionMessage('')
-                setReflectionSafetyChecking(true)
-
-                // Save the user's message to the selected session.
-                if (selectedSession) {
-                  updateSessionMessages(
-                    selectedSession.id,
-                    updatedMessages
-                  )
-                }
-
-                try {
-                  const response =
-                    await sendMessageToBackend(userMessage)
-
-                  if (response.status === 'concern') {
-                    setCurrentScreen('support-resources')
-                    return
-                  }
-
-                  if (response.status === 'error') {
-                    setCurrentScreen('safety-error')
-                    return
-                  }
-
-                  const messagesWithReply = [
-                    ...updatedMessages,
-                    {
-                      role: 'assistant',
-                      text: response.message
-                    }
-                  ]
-
-                  setReflectionMessages(messagesWithReply)
-
-                  // Save both messages to the selected session.
-                  if (selectedSession) {
-                    updateSessionMessages(
-                      selectedSession.id,
-                      messagesWithReply
-                    )
-                  }
-                } catch (error) {
-                  console.error(
-                    'Reflection message failed:',
-                    error
-                  )
-                  setCurrentScreen('safety-error')
-                } finally {
-                  setReflectionSafetyChecking(false)
-                }
-              }}
-            >
-              <label
-                htmlFor='reflection-message'
-                className='sr-only'
-              >
-                Message
-              </label>
-
-              <input
-                id='reflection-message'
-                type='text'
-                placeholder='Write your reflection...'
-                value={reflectionMessage}
-                onChange={(event) =>
-                  setReflectionMessage(event.target.value)
-                }
-                disabled={reflectionSafetyChecking}
-              />
-
-              <button
-                type='submit'
-                disabled={reflectionSafetyChecking}
-              >
-                {reflectionSafetyChecking ? 'Checking...' : 'Send'}
-              </button>
-            </form>
-
-            <p className='conversation-footer'>
-              Your messages should be screened for potential safety
-              concerns before an AI response is generated.
-            </p>
           </section>
         </main>
       </div>
@@ -1220,7 +931,9 @@ function App() {
 
               {/* BREATHING CONTROLS */}
               <div className='breathing-controls'>
+
                 {!breathingActive ? (
+
                   <button
                     className='primary-button'
                     type='button'
@@ -1239,7 +952,6 @@ function App() {
                     className='secondary-button'
                     type='button'
                     onClick={() => {
-                      recordCopingUsage('breathing')
                       setBreathingActive(false)
                       setBreathingPhase('Inhale')
                       setBreathingCount(4)
@@ -1262,48 +974,12 @@ function App() {
                 <strong>Reflection prompt</strong>
                 <p>What has been taking up most of your energy lately?</p>
               </div>
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault()
-
-                  if (!journalText.trim()) return
-
-                  recordCopingUsage('journaling')
-                  setJournalText('')
-                  setJournalSaved(true)
-                }}
-              >
-                <textarea
-                  id='journal-entry'
-                  value={journalText}
-                  onChange={(event) => {
-                    setJournalText(event.target.value)
-                    setJournalSaved(false)
-                  }}
-                  placeholder='Write your thoughts here...'
-                  rows={4}
-                />
-
-                <button className='primary-button' type='submit'>
-                  Save Reflection Journal
-                </button>
-              </form>
-
-              {journalSaved && (
-                <p role='status'>
-                  Reflection recorded for this prototype.
-                </p>
-              )}
-
             </section>
 
-            {/* Grounding */}
+            {/*Grounding*/}
             <section className='coping-tool-section'>
               <h2>Grounding</h2>
-              <p>
-                Bring your attention to the present moment by noticing what is around you
-              </p>
-
+              <p>Bring your attention to the present moment by noticing what is around you</p>
               <div className='grounding-list'>
                 <div>
                   <strong>5</strong>
@@ -1326,32 +1002,6 @@ function App() {
                   <span>things you can notice about your breathing</span>
                 </div>
               </div>
-
-              <div className='breathing-controls'>
-                {!groundingStarted ? (
-                  <button
-                    className='primary-button'
-                    type='button'
-                    onClick={() => {
-                      setGroundingStarted(true)
-                    }}
-                  >
-                    Start Grounding
-                  </button>
-                ) : (
-                  <button
-                    className='primary-button'
-                    type='button'
-                    onClick={() => {
-                      recordCopingUsage('grounding')
-                      setGroundingStarted(false)
-
-                    }}
-                  >
-                    Complete Grounding
-                  </button>
-                )}
-              </div>
             </section>
           </section>
         </main >
@@ -1359,7 +1009,7 @@ function App() {
     )
   }
 
-  // CONVERSATION HISTORY SCREEN
+  // CONVERSTAION HISTORY SCREEN
   // BACKEND INTEGRATION:
   // Replace the sample conversationSessions data with sessions
   // returned for the authenticated user by GET /sessions.
@@ -1390,30 +1040,19 @@ function App() {
 
                   </div>
 
-                  <button
-                    className='session-button'
+                  <button className='session-button'
                     onClick={() => {
                       setSelectedSession(session)
 
-                      if (session.type === 'reflection') {
-                        setConversationStarter(session.prompt)
-                        setReflectionMessages(session.messages || [])
-                        setReflectionMessage('')
-                        setCurrentScreen('reflection-chat')
-                      } else {
-                        setConversationStarter(session.prompt)
-                        setContinueMessages(session.messages || []) // BACKEND INTEGRATION:
-                        // Load the selected session/messages with
-                        // GET /sessions/{session_id}.
-                        setContinueMessage('')
-                        setCurrentScreen('continue-session')
-                      }
-                    }}
-                  >
-                    Continue
-                  </button>
+                      // Clear messages from any previously selected session.
+                      setContinueMessages([])
+                      setContinueMessage('')
+                      // BACKEND INTEGRATION:
+                      // Load the selected session/messages with
+                      // GET /sessions/{session_id}.
 
-
+                      setCurrentScreen('continue-session')
+                    }}>Continue</button>
                 </div>
               ))}
             </div>
@@ -1429,23 +1068,7 @@ function App() {
   // The frontend is never the security boundary.
 
   if (currentScreen === 'analytics') {
-    const analytics = {
-  ...SAMPLE_ANALYTICS,
-  tools: [
-    {
-      name: 'Mindful Breathing',
-      completed: copingUsage.breathing
-    },
-    {
-      name: 'Journaling',
-      completed: copingUsage.journaling
-    },
-    {
-      name: 'Grounding',
-      completed: copingUsage.grounding
-    }
-  ]
-}
+    const analytics = SAMPLE_ANALYTICS
 
     const maxDayCount = Math.max(
       1,
@@ -2196,9 +1819,11 @@ function App() {
     return (
       <div className='app'>
         {supportBar}
-
         <main className='conversation-page'>
+
+          {/* CONVERSATION HEADER */}
           <header className='conversation-header'>
+
             <button
               className='back-button'
               type='button'
@@ -2212,20 +1837,26 @@ function App() {
                 ? selectedSession.title
                 : 'Previous Conversation'}
             </h1>
+
           </header>
 
 
           {/* CONVERSATION CARD */}
           <section className='conversation-card'>
+
+            {/* NON-CLINICAL SUPPORT NOTICE */}
             <div className='conversation-notice'>
-              <strong>Continue your conversation</strong>
+              <strong>Previous Conversation</strong>
+
               <p>
-                Pick up where you left off and continue exploring
-                your thoughts and feelings. This AI companion provides
-                reflective, non-clinical support.
+                You are viewing a previous conversation session. New messages
+                will continue to follow the same safety and non-clinical
+                support controls.
               </p>
             </div>
 
+
+            {/* MESSAGE AREA */}
             <div className='message-area'>
 
               {/* BACKEND INTEGRATION:
@@ -2237,11 +1868,12 @@ function App() {
             */}
 
               <div className='message assistant-message'>
-                <span className='message-label'>Session Prompt</span>
+                <span className='message-label'>
+                  AI Companion
+                </span>
+
                 <p>
-                  {selectedSession
-                    ? selectedSession.prompt
-                    : "Welcome back. Let's continue reflecting on this conversation."}
+                  Welcome back. Let's continue reflecting on this conversation.
                 </p>
               </div>
 
@@ -2258,7 +1890,9 @@ function App() {
                 >
 
                   <span className='message-label'>
-                    {item.role === 'user' ? 'You' : 'AI Companion'}
+                    {item.role === 'user'
+                      ? 'You'
+                      : 'AI Companion'}
                   </span>
 
                   <p>
@@ -2281,6 +1915,7 @@ function App() {
                   </p>
                 </div>
               )}
+
             </div>
 
 
@@ -2308,65 +1943,76 @@ function App() {
 
                 const userMessage = continueMessage.trim()
 
-                const updatedMessages = [
-                  ...continueMessages,
-                  { role: 'user', text: userMessage }
-                ]
 
-                setContinueMessages(updatedMessages)
+                // ============================================================
+                // ADD USER MESSAGE
+                // ============================================================
+
+                setContinueMessages((currentMessages) => [
+                  ...currentMessages,
+                  {
+                    role: 'user',
+                    text: userMessage
+                  }
+                ])
+
+
+                // Clear input
                 setContinueMessage('')
+
+
+                // Start the message-processing request.
                 setContinueSafetyChecking(true)
+                setSafetyStatus('checking')
 
-                // Save the user's message to the selected session.
-                if (selectedSession) {
-                  updateSessionMessages(
-                    selectedSession.id,
-                    updatedMessages
-                  )
-                }
-
+                // BACKEND INTEGRATION:
+                // This service currently returns mock responses.
+                // Later, it will call FastAPI for safety screening,
+                // scope classification, and the AI response.
                 try {
                   const response =
                     await sendMessageToBackend(userMessage)
 
+                  setContinueSafetyChecking(false)
+                  setSafetyStatus(response.status)
+
+                  // Safety concern: show support resources.
                   if (response.status === 'concern') {
                     setCurrentScreen('support-resources')
                     return
                   }
 
+                  // Processing error: show the error screen.
                   if (response.status === 'error') {
                     setCurrentScreen('safety-error')
                     return
                   }
 
-                  const messagesWithReply = [
-                    ...updatedMessages,
+                  // Display either the scope redirect
+                  // or the wellness AI response.
+                  setContinueMessages((currentMessages) => [
+                    ...currentMessages,
                     {
                       role: 'assistant',
                       text: response.message
                     }
-                  ]
-
-                  setContinueMessages(messagesWithReply)
-
-                  // Save both messages to the selected session.
-                  if (selectedSession) {
-                    updateSessionMessages(
-                      selectedSession.id,
-                      messagesWithReply
-                    )
-                  }
+                  ])
                 } catch (error) {
                   console.error(
-                    'Continue session message failed:',
+                    'Continue session request failed:',
                     error
                   )
-                  setCurrentScreen('safety-error')
-                } finally {
+
                   setContinueSafetyChecking(false)
+                  setSafetyStatus('error')
+                  setCurrentScreen('safety-error')
                 }
               }}
             >
+
+
+              {/* MESSAGE INPUT */}
+
               <label
                 htmlFor='continue-message'
                 className='sr-only'
@@ -2377,7 +2023,7 @@ function App() {
               <input
                 id='continue-message'
                 type='text'
-                placeholder='Write your message...'
+                placeholder="What's on your mind today?"
                 value={continueMessage}
                 onChange={(event) =>
                   setContinueMessage(event.target.value)
@@ -2385,23 +2031,35 @@ function App() {
                 disabled={continueSafetyChecking}
               />
 
+
+              {/* SEND BUTTON */}
+
               <button
                 type='submit'
                 disabled={continueSafetyChecking}
               >
-                {continueSafetyChecking ? 'Checking...' : 'Send'}
+                {continueSafetyChecking
+                  ? 'Checking...'
+                  : 'Send'}
               </button>
+
             </form>
 
+
+            {/* SAFETY FOOTER */}
+
             <p className='conversation-footer'>
-              Your messages should be screened for potential safety
-              concerns before an AI response is generated.
+              Your messages will be screened for potential safety concerns
+              before a response is generated.
             </p>
+
           </section>
+
         </main>
       </div>
     )
   }
+
   // SUPPORT & CRISIS RESOURCES
   // SAFETY INTEGRATION:
   // This is reviewed/static content. The backend safety layer
@@ -2463,9 +2121,6 @@ function App() {
                 type='button'
                 onClick={() => {
                   setMessages([])
-                  setMessage('')
-                  setSafetyStatus('clear')
-                  setSafetyChecking(false)
                   setCurrentScreen('home')
                 }}>End Session
               </button>

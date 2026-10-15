@@ -862,10 +862,6 @@ input:disabled {
   background: var(--tp-wave-line) repeat-x left center / 44px 12px;
 }
 
-.coping-tool-section:not(:last-child) {
-  padding-bottom: 44px;
-}
-
 .coping-tool-section:last-child {
   padding-bottom: 12px;
 }
@@ -1060,50 +1056,6 @@ input:disabled {
   line-height: 1.5;
 }
 
-.coping-tool-section form {
-  margin-top: 18px;
-}
-
-.coping-tool-section form label {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--tp-deep);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.coping-tool-section textarea {
-  display: block;
-  width: 100%;
-  min-height: 120px;
-  padding: 14px 16px;
-  border: 1px solid var(--tp-border);
-  border-radius: var(--tp-radius-medium);
-  background: var(--tp-soft);
-  color: var(--tp-deep);
-  font: inherit;
-  font-size: 15px;
-  line-height: 1.6;
-  resize: vertical;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.coping-tool-section textarea::placeholder {
-  color: var(--tp-muted);
-  opacity: 0.8;
-}
-
-.coping-tool-section textarea:focus {
-  outline: none;
-  border-color: var(--tp-sea);
-  box-shadow: 0 0 0 3px
-    color-mix(in srgb, var(--tp-sea) 15%, transparent);
-}
-
-.coping-tool-section form button[type='submit'] {
-  display: block;
-  margin: 16px auto 0;
-}
 
 /* =========================================
    GROUNDING
@@ -1172,44 +1124,6 @@ input:disabled {
   line-height: 1.4;
 }
 
-.coping-tool-section > label:has(input[type='checkbox']) {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 18px;
-  padding: 12px 14px;
-  border: 1px solid var(--tp-border);
-  border-radius: var(--tp-radius-medium);
-  background: var(--tp-soft);
-  color: var(--tp-deep);
-  font-size: 14px;
-  line-height: 1.5;
-  cursor: pointer;
-}
-
-.coping-tool-section > label input[type='checkbox'] {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-  margin: 0;
-  accent-color: var(--tp-sea);
-  cursor: pointer;
-}
-
-.coping-tool-section > label input[type='checkbox']:focus-visible {
-  outline: 2px solid var(--tp-sea);
-  outline-offset: 3px;
-}
-
-.coping-tool-section > button.primary-button {
-  display: block;
-  margin: 16px auto 0;
-}
-
-.coping-tool-section button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 
 /* =========================================
    CONVERSATION HISTORY
