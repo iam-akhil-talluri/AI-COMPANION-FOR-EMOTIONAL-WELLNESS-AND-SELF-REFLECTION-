@@ -56,6 +56,28 @@ BACKEND / AI INTEGRATION MAP
 
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
+
+const ANALYTICS_STORAGE_KEY = 'wellnessCompanionAnalytics'
+
+function getAnalyticsData() {
+  try {
+    const savedData = localStorage.getItem(ANALYTICS_STORAGE_KEY)
+
+    return savedData
+      ? JSON.parse(savedData)
+      : { visits: [], conversations: [] }
+  } catch {
+    return { visits: [], conversations: [] }
+  }
+}
+
+function saveAnalyticsData(data) {
+  localStorage.setItem(
+    ANALYTICS_STORAGE_KEY,
+    JSON.stringify(data)
+  )
+}
+
 import { sendMessageToBackend } from './services/chatService'
 
 //MY ANALYTICS: Prototype Sample Data
@@ -179,6 +201,7 @@ function App() {
   const [userRole, setUserRole] = useState(null)
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState([])
+  const [activeConversationId, setActiveConversationId] = useState(null)
   const [reflectionMessage, setReflectionMessage] = useState('')
   const [reflectionMessages, setReflectionMessages] = useState([])
   const [reflectionSafetyChecking, setReflectionSafetyChecking] = useState(false)
@@ -215,6 +238,24 @@ function App() {
   const [breathingPhase, setBreathingPhase] = useState('Inhale')
   const [breathingCount, setBreathingCount] = useState(4)
   const countRef = useRef(4)
+
+  useEffect(() => {
+    const data = getAnalyticsData()
+
+    data.visits.push(new Date().toISOString())
+
+    saveAnalyticsData(data)
+  }, [])
+
+
+  function recordNewConversation() {
+    const data = getAnalyticsData()
+
+    data.conversations.push(new Date().toISOString())
+
+    saveAnalyticsData(data)
+  }
+
 
   useEffect(() => {
     if (!breathingActive) return
@@ -474,6 +515,8 @@ function App() {
                   className='logout-button'
                   type='button'
                   onClick={() => {
+                    setMessages([])
+                    setMessage('')
                     setUserRole(null)
                     setAdminLogin(false)
                     setLoginError('')
@@ -733,6 +776,37 @@ function App() {
                 }
 
                 const userMessage = message.trim()
+
+                let sessionId = activeConversationId
+
+                if (messages.length === 0) {
+                  recordNewConversation()
+
+                  sessionId = Date.now()
+                  setActiveConversationId(sessionId)
+
+                  const newSession = {
+                    id: sessionId,
+                    type: 'conversation',
+                    date: new Date().toLocaleDateString('en-US', {
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric'
+                    }),
+                    title: userMessage.length > 40
+                      ? `${userMessage.substring(0, 40)}...`
+                      : userMessage,
+                    prompt: 'What would you like to talk about today?',
+                    messageCount: 0,
+                    messages: []
+                  }
+
+                  setConversationSessions((currentSessions) => [
+                    newSession,
+                    ...currentSessions
+                  ])
+                }
+
                 // BACKEND INTEGRATION:
                 // Send this message with the authenticated user/session
                 // information to the backend after the safety workflow
@@ -742,13 +816,19 @@ function App() {
                 setSafetyStatus('checking')
 
                 // Add user's message
-                setMessages((currentMessages) => [
-                  ...currentMessages,
+                const updatedMessages = [
+                  ...messages,
                   {
                     role: 'user',
                     text: userMessage
                   }
-                ])
+                ]
+
+                setMessages(updatedMessages)
+
+                if (sessionId !== null) {
+                  updateSessionMessages(sessionId, updatedMessages)
+                }
 
                 // Clear input
                 setMessage('')
@@ -775,13 +855,23 @@ function App() {
                     return
                   }
 
-                  setMessages((currentMessages) => [
-                    ...currentMessages,
+                  const updatedMessages = [
+                    ...messages,
+                    {
+                      role: 'user',
+                      text: userMessage
+                    },
                     {
                       role: 'assistant',
                       text: response.message
                     }
-                  ])
+                  ]
+
+                  setMessages(updatedMessages)
+
+                  if (sessionId !== null) {
+                    updateSessionMessages(sessionId, updatedMessages)
+                  }
                 } catch (error) {
                   console.error('Message request failed:', error)
 
