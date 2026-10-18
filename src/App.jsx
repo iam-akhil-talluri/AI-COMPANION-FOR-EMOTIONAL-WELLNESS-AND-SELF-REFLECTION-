@@ -1974,6 +1974,111 @@ function App() {
 
           </section>
 
+          {/* COST & AI USAGE */}
+
+          <section className='analytics-card'>
+
+            <h2>Cost &amp; AI Usage</h2>
+
+            <p className='analytics-intro'>
+              AI token consumption and estimated costs.
+              Values will be available after backend integration.
+            </p>
+
+            <div className='analytics-summary-grid'>
+
+              <article className='analytics-stat-card'>
+
+                <span className='analytics-stat-label'>
+                  Estimated AI Cost
+                </span>
+
+                <strong className='analytics-stat-number'>
+                  —
+                </strong>
+
+                <span className='analytics-stat-description'>
+                  Reporting period: Last 7 Days
+                </span>
+
+              </article>
+
+              <article className='analytics-stat-card'>
+
+                <span className='analytics-stat-label'>
+                  Total Tokens
+                </span>
+
+                <strong className='analytics-stat-number'>
+                  —
+                </strong>
+
+                <span className='analytics-stat-description'>
+                  Input and output tokens
+                </span>
+
+              </article>
+
+              <article className='analytics-stat-card'>
+
+                <span className='analytics-stat-label'>
+                  AI Requests
+                </span>
+
+                <strong className='analytics-stat-number'>
+                  —
+                </strong>
+
+                <span className='analytics-stat-description'>
+                  Requests processed
+                </span>
+
+              </article>
+
+              <article className='analytics-stat-card'>
+
+                <span className='analytics-stat-label'>
+                  Budget Utilization
+                </span>
+
+                <strong className='analytics-stat-number'>
+                  —
+                </strong>
+
+                <span className='analytics-stat-description'>
+                  Requires a configured budget
+                </span>
+
+              </article>
+
+            </div>
+
+            <div className='tool-usage-list'>
+
+              <div className='tool-usage-item'>
+                <span>Input Tokens</span>
+                <strong>Pending integration</strong>
+              </div>
+
+              <div className='tool-usage-item'>
+                <span>Output Tokens</span>
+                <strong>Pending integration</strong>
+              </div>
+
+              <div className='tool-usage-item'>
+                <span>Cost by AI Model</span>
+                <strong>Pending integration</strong>
+              </div>
+
+              <div className='tool-usage-item'>
+                <span>RAG and Embedding Usage</span>
+                <strong>Pending integration</strong>
+              </div>
+
+            </div>
+
+          </section>
+
 
           {/*  SESSION FREQUENCY */}
 
