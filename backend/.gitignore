@@ -1,0 +1,14 @@
+# Secrets
+.env
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Local SQLite databases
+data/*.db
+*.db
