@@ -32,6 +32,24 @@ class Settings(BaseSettings):
     # Number of recent messages passed to the reply provider.
     context_messages: int = Field(default=8, ge=1, validation_alias="CONTEXT_MESSAGES")
 
+    # Conversational AI (OpenAI). Without a key, low-risk messages get 503 reply_unavailable;
+    # escalated messages still get the reviewed support response.
+    openai_api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
+    # Cheapest model that tested well for this use; a non-reasoning model keeps replies fast.
+    openai_model: str = Field(default="gpt-4o-mini", validation_alias="OPENAI_MODEL")
+    ai_timeout_seconds: float = Field(default=20.0, gt=0, validation_alias="AI_TIMEOUT_SECONDS")
+    ai_max_retries: int = Field(default=1, ge=0, le=5, validation_alias="AI_MAX_RETRIES")
+    ai_max_output_tokens: int = Field(default=300, ge=16, validation_alias="AI_MAX_OUTPUT_TOKENS")
+    # Empty means "not sent" (some models only accept their default temperature).
+    ai_temperature: float | None = Field(default=0.6, ge=0, le=2, validation_alias="AI_TEMPERATURE")
+    # Second safety opinion from the OpenAI Moderation API (free). Input moderation fails closed.
+    use_openai_moderation: bool = Field(default=True, validation_alias="USE_OPENAI_MODERATION")
+    # USD per 1 million tokens, for cost estimates only. Check current OpenAI pricing for the model.
+    price_input_per_million: float = Field(default=0.15, ge=0, validation_alias="PRICE_INPUT_PER_MILLION")
+    price_output_per_million: float = Field(default=0.60, ge=0, validation_alias="PRICE_OUTPUT_PER_MILLION")
+    # Optional monthly AI spending cap in USD. When reached, AI replies stop until the next month.
+    ai_monthly_budget_usd: float | None = Field(default=None, gt=0, validation_alias="AI_MONTHLY_BUDGET_USD")
+
     max_message_chars: int = Field(default=2000, ge=1, validation_alias="MAX_MESSAGE_CHARS")
     max_messages_per_session: int = Field(default=100, ge=2, validation_alias="MAX_MESSAGES_PER_SESSION")
     rate_limit_per_minute: int = Field(default=10, ge=1, validation_alias="RATE_LIMIT_PER_MINUTE")
@@ -41,6 +59,16 @@ class Settings(BaseSettings):
     enable_api_docs: bool = Field(default=True, validation_alias="ENABLE_API_DOCS")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _empty_means_unset(cls, data):
+        # `AI_TEMPERATURE=` or `AI_MONTHLY_BUDGET_USD=` in .env means "not set", not an invalid number.
+        if isinstance(data, dict):
+            for key in ("AI_TEMPERATURE", "ai_temperature", "AI_MONTHLY_BUDGET_USD", "ai_monthly_budget_usd"):
+                if data.get(key) == "":
+                    data[key] = None
+        return data
 
     @model_validator(mode="after")
     def _check_secrets(self) -> "Settings":
@@ -59,6 +87,14 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def ai_configured(self) -> bool:
+        return bool(self.openai_api_key.strip())
+
+    @property
+    def moderation_enabled(self) -> bool:
+        return self.use_openai_moderation and self.ai_configured
 
     @property
     def api_docs_enabled(self) -> bool:

@@ -1,10 +1,30 @@
 """Shared test helpers."""
 
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
 from fastapi.testclient import TestClient
 
 MOCK_REPLY = "That sounds like a lot to carry. Would it help to pick one small next step?"
 PASSWORD = "correct-horse-battery"
 ORIGIN = "http://localhost:5173"
+AI_TEXT = "That sounds like a heavy day. What part of it is weighing on you most?"
+
+
+def completion(text: str = AI_TEXT, prompt_tokens: int = 700, completion_tokens: int = 40):
+    """A fake OpenAI chat completion."""
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=text), finish_reason="stop")],
+        usage=SimpleNamespace(prompt_tokens=prompt_tokens, completion_tokens=completion_tokens),
+        model="gpt-test",
+    )
+
+
+def moderation_result(*flagged: str):
+    """A fake OpenAI moderation response flagging the given categories."""
+    categories = MagicMock()
+    categories.model_dump.return_value = {name: True for name in flagged}
+    return SimpleNamespace(results=[SimpleNamespace(categories=categories)])
 
 
 def register(client: TestClient, username: str = "calm-river", password: str = PASSWORD) -> dict:

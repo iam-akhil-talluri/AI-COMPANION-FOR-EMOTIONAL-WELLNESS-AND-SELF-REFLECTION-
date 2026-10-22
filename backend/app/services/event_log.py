@@ -23,6 +23,11 @@ EVENT_TYPES = {
     "admin_login",
     "login_failed",
     "retention_purge",
+    "safety_check",
+    "risk_detected",
+    "escalation_triggered",
+    "response_blocked",
+    "safety_unavailable",
 }
 
 _LEVELS = {"info": logging.INFO, "warning": logging.WARNING, "error": logging.ERROR}
@@ -38,6 +43,11 @@ _LOG_LABELS = {
     "admin_login": ("Account", "Administrator signed in"),
     "login_failed": ("Account", "Sign-in attempt failed"),
     "retention_purge": ("System", "Expired transcripts removed"),
+    "safety_check": ("Safety Check", "Safety check completed"),
+    "risk_detected": ("Safety", "Sensitive topic answered with a boundary"),
+    "escalation_triggered": ("Safety", "Safety concern routed to support resources"),
+    "response_blocked": ("Safety", "AI reply blocked by the output check"),
+    "safety_unavailable": ("Error", "Safety check failed; message not sent"),
 }
 _STATUS = {"info": "OK", "warning": "Warning", "error": "Error"}
 

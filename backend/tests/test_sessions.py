@@ -128,8 +128,9 @@ def test_reply_is_returned_and_saved(client, auth, fake_replies):
     response = send(client, auth, session_id, "  I had a long day.  ")
     assert response.status_code == 200
     body = response.json()
-    assert body == {"session_id": session_id, "status": "ok", "response": MOCK_REPLY,
-                    "created_at": body["created_at"]}
+    # A simple provider's reply is not safety-checked, so risk_level is null.
+    assert body == {"session_id": session_id, "status": "ok", "response": MOCK_REPLY, "risk_level": None,
+                    "resources": [], "created_at": body["created_at"]}
     assert body["created_at"].endswith("Z")
     fake_replies.assert_called_once_with([], "I had a long day.")
 

@@ -4,15 +4,14 @@
   Sessions, conversation history and sending messages, through the FastAPI backend.
 
   Flow for every message:
-  React → POST /api/sessions/{id}/messages → backend saves the message and the
-  reply → React
+  React → POST /api/sessions/{id}/messages → safety check → (AI reply with an
+  output check, or a reviewed support message) → backend saves both → React
 
-  Replies come from the backend's reply provider (the safety and AI layer).
-  Until that layer is connected, the backend answers 503 reply_unavailable and
-  stores nothing; the screens show that as a notice and keep the user's text.
+  The backend fails closed: if the safety check cannot run it answers
+  503 safety_unavailable and the message never reaches the AI.
 */
 
-import { apiRequest } from './apiClient'
+import { ApiError, apiRequest } from './apiClient'
 
 // Backend limit (MAX_MESSAGE_CHARS).
 export const MAX_MESSAGE_LENGTH = 2000
@@ -72,18 +71,30 @@ export async function deleteSession(sessionId) {
 }
 
 /*
-  Sends one message and returns { status: 'ok', message } with the reply.
-  Every failure (no reply available, rate limit, length limit, expired sign-in,
-  network) throws an ApiError whose message is safe to show in the conversation.
+  Sends one message and returns:
+    { status: 'ok',      message }             show the reply
+    { status: 'support', message, resources }  show the reply with support resources under it
+    { status: 'crisis',  message, resources }  show the reply, then the Support & Crisis Resources screen
+    { status: 'error',   message }             the safety check could not run (fail closed)
+  Other failures (AI unavailable, rate limit, length limit, expired sign-in,
+  network) throw an ApiError whose message is safe to show in the conversation.
 */
 export async function sendMessageToBackend(sessionId, userMessage) {
-  const data = await apiRequest(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, {
-    method: 'POST',
-    body: { content: userMessage }
-  })
+  try {
+    const data = await apiRequest(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, {
+      method: 'POST',
+      body: { content: userMessage }
+    })
 
-  return {
-    status: data.status,
-    message: data.response
+    return {
+      status: data.status,
+      message: data.response,
+      resources: data.resources || []
+    }
+  } catch (error) {
+    if (error instanceof ApiError && error.code === 'safety_unavailable') {
+      return { status: 'error', message: error.message }
+    }
+    throw error
   }
 }

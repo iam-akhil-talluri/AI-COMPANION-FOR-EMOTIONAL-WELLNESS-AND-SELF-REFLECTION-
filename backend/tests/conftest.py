@@ -17,6 +17,10 @@ os.environ.update({
     "RATE_LIMIT_PER_HOUR": "1000",
     "RETENTION_INTERVAL_HOURS": "0",
     "CORS_ORIGINS": "http://localhost:5173",
+    # Tests never call OpenAI, even when backend/.env holds a real key.
+    "OPENAI_API_KEY": "",
+    "USE_OPENAI_MODERATION": "false",
+    "AI_MONTHLY_BUDGET_USD": "",
 })
 
 import pytest
@@ -25,13 +29,15 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.config import get_settings
 from app.db.models import Base
 from app.db.session import build_engine, get_db
 from app.main import app
-from app.services import reply_provider
+from app.services import ai_service, reply_provider
+from app.services.companion import companion_reply
 from app.services.rate_limiter import limiter
 from app.services.user_service import create_user
-from tests.helpers import MOCK_REPLY, PASSWORD, register
+from tests.helpers import MOCK_REPLY, PASSWORD, completion, moderation_result, register
 
 
 def _sqlite_engine():
@@ -94,10 +100,24 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
 
 @pytest.fixture
 def fake_replies() -> MagicMock:
-    """Register a mock reply provider that returns MOCK_REPLY."""
-    provider = MagicMock(return_value=MOCK_REPLY)
+    """Register a simple (context, message) mock reply provider that returns MOCK_REPLY."""
+    def simple_provider(context, message): ...
+
+    provider = MagicMock(spec=simple_provider, return_value=MOCK_REPLY)
     reply_provider.set_reply_provider(provider)
     return provider
+
+
+@pytest.fixture
+def openai(monkeypatch) -> MagicMock:
+    """Register the real companion with a mocked OpenAI client (AI configured, moderation off)."""
+    fake = MagicMock()
+    fake.chat.completions.create.return_value = completion()
+    fake.moderations.create.return_value = moderation_result()
+    monkeypatch.setattr(ai_service, "get_client", lambda settings=None: fake)
+    monkeypatch.setattr(get_settings(), "openai_api_key", "sk-test")
+    reply_provider.set_reply_provider(companion_reply)
+    return fake
 
 
 @pytest.fixture

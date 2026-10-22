@@ -24,13 +24,19 @@ Full details: backend/docs/frontend-integration.md
 2. CONVERSATIONS (services/chatService.js)              CONNECTED
    POST /api/sessions and POST /api/sessions/{session_id}/messages.
 
-3. SAFETY / MODERATION                                  NOT YET (Emmanuel)
-   Will run inside the backend before any AI call. Until it is connected
-   the backend answers 503 reply_unavailable and stores nothing, so no
-   message reaches an AI unscreened.
+3. SAFETY / MODERATION                                  CONNECTED
+   Runs inside the backend before any AI call (rules + OpenAI Moderation).
+   The reply's status drives the screens:
+     ok      show the reply
+     support show the reply with support resources under it
+     crisis  show the reviewed crisis message, then the Support & Crisis
+             Resources screen (the AI is never called for these)
+   If the check cannot run, the backend fails closed with 503
+   safety_unavailable and the Safety Check Unavailable screen opens.
 
-4. CONVERSATIONAL AI                                    NOT YET (Emmanuel)
-   Replies come from the backend's reply provider.
+4. CONVERSATIONAL AI                                    CONNECTED
+   OpenAI, called by the backend only after the safety check. Every AI reply
+   is checked again before it is shown. The browser never sees the API key.
 
 5. CONVERSATION HISTORY (services/chatService.js)       CONNECTED
    GET /api/sessions, GET /api/sessions/{session_id},
@@ -40,9 +46,11 @@ Full details: backend/docs/frontend-integration.md
    MySQL stores sessions and messages (deleted after the retention period).
 
 7. ANALYTICS / OPERATIONAL LOGGING (services/adminService.js)
+   Admin statistics, safety, escalations, AI cost:
+     GET /api/admin/analytics                          CONNECTED
    Admin "Recent Log Events": GET /api/admin/logs      CONNECTED
-   Admin "Architecture Health": GET /api/health        CONNECTED (3 rows)
-   My Insights and the other admin cards               SAMPLE DATA (no endpoint yet)
+   Admin "Architecture Health": GET /api/health        CONNECTED
+   My Insights and admin Coping Tool Activity          SAMPLE DATA (no endpoint yet)
 
 8. COPING TOOLS
    Static, reviewed frontend content; no AI. Journal entries and tool
@@ -64,11 +72,22 @@ import {
   listSessions,
   sendMessageToBackend
 } from './services/chatService'
-import { formatLogTime, getHealth, getRecentLogs } from './services/adminService'
+import {
+  formatLogTime,
+  formatNumber,
+  formatUsd,
+  getAdminAnalytics,
+  getHealth,
+  getRecentLogs
+} from './services/adminService'
 
 const CONVERSATION_STARTER = 'What would you like to talk about today?'
 
+// Screens that send messages; the support and safety-error screens return to them.
+const CHAT_SCREENS = ['conversation', 'reflection-chat', 'continue-session']
+
 // One message bubble. role: user | assistant | notice (a system message, e.g. "no reply available").
+// item.resources: reviewed support resources sent by the backend with a `support` or `crisis` reply.
 function MessageBubble({ item }) {
   const className =
     item.role === 'user'
@@ -84,6 +103,21 @@ function MessageBubble({ item }) {
     <div className={className}>
       <span className='message-label'>{label}</span>
       <p>{item.text}</p>
+
+      {item.resources?.length > 0 && (
+        <div className='message-resources'>
+          <strong>Support is available</strong>
+          {item.resources.map((resource) => (
+            <div className='message-resource' key={resource.id}>
+              <div>
+                <span className='message-resource-name'>{resource.name}</span>
+                <span className='message-resource-description'>{resource.description}</span>
+              </div>
+              <a className='support-resource-button' href={resource.href}>{resource.action_label}</a>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -114,92 +148,51 @@ const SAMPLE_ANALYTICS = {
   ]
 }
 
-// ADMIN DASHBOARD SAMPLE DATA
-// BACKEND INTEGRATION:
-// Recent Log Events and Architecture Health now come from the backend
-// (GET /api/admin/logs, GET /api/health). The other cards have no
-// endpoint yet and keep this sample data.
-//
-// IMPORTANT:
-// The backend must verify the admin role.
-// Do not display raw conversation messages or personal user information.
-
-const SAMPLE_ADMIN_ANALYTICS = {
-  activeUsers: 24,
-  totalSessions: 41,
-  sessionsPerUser: 1.7,
-
-  messagesSafetyChecked: 286,
-  safetyCheckErrors: 3,
+// ADMIN DASHBOARD DATA
+// Statistics, safety decisions, escalations and AI cost come from GET /api/admin/analytics,
+// Recent Log Events from GET /api/admin/logs, and Architecture Health from GET /api/health.
+// The backend verifies the admin role and never returns message text or usernames.
+// These zeros are shown until the first load finishes.
+const EMPTY_ADMIN_ANALYTICS = {
+  activeUsers: 0,
+  totalSessions: 0,
+  sessionsPerUser: 0,
+  messagesSafetyChecked: 0,
+  safetyCheckErrors: 0,
   sentToAIUnchecked: 0,
-
-  weekdays: [
-    { day: 'Mon', count: 5 },
-    { day: 'Tue', count: 8 },
-    { day: 'Wed', count: 6 },
-    { day: 'Thu', count: 9 },
-    { day: 'Fri', count: 4 },
-    { day: 'Sat', count: 5 },
-    { day: 'Sun', count: 4 }
-  ],
-
-  escalations: 7,
-
-  safetyDecisions: {
-    clear: 276,
-    concern: 7,
-    error: 3
-  },
-
-  copingTools: [
-    { name: 'Mindful Breathing', completed: 48 },
-    { name: 'Grounding Exercise', completed: 31 },
-    { name: 'Reflection Prompt', completed: 26 },
-    { name: 'Journaling', completed: 19 }
-  ],
-
-  architectureHealth: [
-    { name: 'Frontend', status: 'Healthy' },
-    { name: 'Backend / API', status: 'Healthy' },
-    { name: 'Safety / Moderation', status: 'Healthy' },
-    { name: 'AI Service', status: 'Healthy' },
-    { name: 'Database', status: 'Healthy' },
-    { name: 'Analytics / Logging', status: 'Healthy' }
-  ],
-
-  recentLogs: [
-    {
-      time: '10:42 AM',
-      type: 'Safety Check',
-      message: 'Safety check completed',
-      status: 'OK'
-    },
-    {
-      time: '10:35 AM',
-      type: 'Session',
-      message: 'Conversation session completed',
-      status: 'OK'
-    },
-    {
-      time: '10:21 AM',
-      type: 'Safety',
-      message: 'Safety concern routed to support resources',
-      status: 'Warning'
-    },
-    {
-      time: '10:08 AM',
-      type: 'System',
-      message: 'AI service health check completed',
-      status: 'OK'
-    },
-    {
-      time: '09:54 AM',
-      type: 'Error',
-      message: 'Safety service request failed',
-      status: 'Error'
-    }
-  ]
+  weekdays: [],
+  escalations: 0,
+  crisisEscalations: 0,
+  supportEscalations: 0,
+  safetyDecisions: { clear: 0, concern: 0, error: 0 },
+  boundaryReplies: 0,
+  repliesBlocked: 0,
+  aiUsage: {
+    model: '',
+    configured: false,
+    requests: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    estimatedCost: 0,
+    avgCostPerRequest: 0,
+    avgLatencyMs: 0,
+    repliesWithoutAI: 0,
+    monthToDateCost: 0,
+    monthlyBudget: null,
+    budgetUtilization: null,
+    byModel: [],
+    daily: []
+  }
 }
+
+// Coping Tool Activity: sample data (no backend endpoint for coping-tool usage yet).
+const SAMPLE_COPING_TOOLS = [
+  { name: 'Mindful Breathing', completed: 48 },
+  { name: 'Grounding Exercise', completed: 31 },
+  { name: 'Reflection Prompt', completed: 26 },
+  { name: 'Journaling', completed: 19 }
+]
 
 
 function App() {
@@ -225,6 +218,8 @@ function App() {
   const [continueMessage, setContinueMessage] = useState('')
   const [continueMessages, setContinueMessages] = useState([])
   const [previousScreen, setPreviousScreen] = useState('home')
+  // Where the Support & Crisis Resources and Safety Check Unavailable screens go back to.
+  const [returnScreen, setReturnScreen] = useState('home')
   const [continueSafetyChecking, setContinueSafetyChecking] = useState(false)
   const [conversationStarter, setConversationStarter] = useState(CONVERSATION_STARTER)
   // Error shown on a screen when an action could not start (e.g. network down).
@@ -246,11 +241,14 @@ function App() {
   const [breathingPhase, setBreathingPhase] = useState('Inhale')
   const [breathingCount, setBreathingCount] = useState(4)
   const countRef = useRef(4)
+  // End of the open chat's message list, so a new reply scrolls into view.
+  const messageEndRef = useRef(null)
 
   // Data loaded from the backend for the History screen and the Admin Dashboard.
   const [conversationSessions, setConversationSessions] = useState([])
   const [recentLogs, setRecentLogs] = useState([])
   const [healthServices, setHealthServices] = useState([])
+  const [adminAnalyticsData, setAdminAnalyticsData] = useState(null)
   // Which data screen finished loading last, and its error message if it failed.
   const [loadedScreen, setLoadedScreen] = useState({ screen: null, error: '' })
   const [openingSessionId, setOpeningSessionId] = useState(null)
@@ -279,6 +277,8 @@ function App() {
     setConversationSessions([])
     setRecentLogs([])
     setHealthServices([])
+    setAdminAnalyticsData(null)
+    setReturnScreen('home')
     setLoadedScreen({ screen: null, error: '' })
     setScreenNotice('')
     setHistoryError('')
@@ -318,15 +318,31 @@ function App() {
     }
   }, [])
 
+  // Every screen opens at the top (e.g. the crisis resources screen after a long chat).
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [currentScreen])
+
+  // Keep the newest message (and the "checking" bubble) visible in the open chat.
+  useEffect(() => {
+    messageEndRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [messages, reflectionMessages, continueMessages, safetyChecking, reflectionSafetyChecking,
+    continueSafetyChecking])
+
   // SCREEN DATA
   // History and the Admin Dashboard load fresh data each time they open.
   useEffect(() => {
     const loaders = {
       history: async () => setConversationSessions(await listSessions()),
       admin: async () => {
-        const [logs, health] = await Promise.all([getRecentLogs(10), getHealth()])
+        const [logs, health, analytics] = await Promise.all([
+          getRecentLogs(10),
+          getHealth(),
+          getAdminAnalytics(7)
+        ])
         setRecentLogs(logs)
         setHealthServices(health.services)
+        setAdminAnalyticsData(analytics)
       }
     }
 
@@ -346,6 +362,7 @@ function App() {
         } else {
           setRecentLogs([])
           setHealthServices([])
+          setAdminAnalyticsData(null)
         }
         setLoadedScreen({ screen: currentScreen, error: error.message })
       })
@@ -432,9 +449,15 @@ function App() {
   /*
     SEND A MESSAGE THROUGH THE BACKEND
     Shared by Conversation, Reflection Chat and Continue Session.
-    The backend saves the message and the reply together. Any failure (no reply
-    available yet, rate limit, length limit, network) appears as a notice in the
-    conversation, nothing is saved, and the user's text is put back in the input.
+    The backend safety-checks the message, then saves it with the reply.
+    - support: the reply shows the support resources under it
+    - crisis:  the reviewed crisis reply is shown, and the Support & Crisis
+               Resources screen opens (its Back button returns here)
+    - error:   the safety check could not run (fail closed): nothing was saved
+               or sent to the AI; the Safety Check Unavailable screen opens and
+               the user's text is kept for Try Again
+    Any other failure (AI unavailable, rate limit, length limit, network) appears
+    as a notice in the conversation, nothing is saved, and the text is put back.
   */
   async function deliverMessage({ sessionId, userMessage, currentMessages, setList, setChecking, setInput }) {
     const withUserMessage = [...currentMessages, { role: 'user', text: userMessage }]
@@ -444,7 +467,24 @@ function App() {
 
     try {
       const response = await sendMessageToBackend(sessionId, userMessage)
-      setList([...withUserMessage, { role: 'assistant', text: response.message }])
+
+      if (response.status === 'error') {
+        setList(currentMessages)
+        setInput(userMessage)
+        setReturnScreen(currentScreen)
+        setCurrentScreen('safety-error')
+        return false
+      }
+
+      setList([
+        ...withUserMessage,
+        { role: 'assistant', text: response.message, resources: response.resources }
+      ])
+
+      if (response.status === 'crisis') {
+        setReturnScreen(currentScreen)
+        setCurrentScreen('support-resources')
+      }
       return true
     } catch (error) {
       console.error('Message request failed:', error)
@@ -538,12 +578,30 @@ function App() {
     }
   }
 
+  // END SESSION (support and safety-error screens): leave every open conversation.
+  // The messages are already saved, so they stay available in History.
+  function endSession() {
+    setMessages([])
+    setMessage('')
+    setActiveConversationId(null)
+    setReflectionMessages([])
+    setReflectionMessage('')
+    setContinueMessages([])
+    setContinueMessage('')
+    setSelectedSession(null)
+    setSafetyChecking(false)
+    setCurrentScreen('home')
+  }
+
   // SUPPORT BAR (shown on every screen except the support page itself)
   // SAFETY INTEGRATION:
   // Opens the reviewed/static support page. No AI and no backend call is needed,
   // so it keeps working even if the safety service is down.
   const openSupport = () => {
-    setPreviousScreen(currentScreen)
+    // From the safety-error screen, keep pointing at the conversation it came from.
+    if (currentScreen !== 'safety-error') {
+      setReturnScreen(currentScreen)
+    }
     // Stop the breathing exercise so it doesn't keep running in the background
     setBreathingActive(false)
     setBreathingPhase('Inhale')
@@ -919,6 +977,7 @@ function App() {
                   <p>Checking your message before continuing...</p>
                 </div>
               )}
+              <div className='message-end' ref={messageEndRef} />
 
             </div>
 
@@ -996,7 +1055,7 @@ function App() {
             </form>
 
             <p className='conversation-footer'>
-              Your messages will be screened for potential safety concerns before a response is generated
+              Your messages are screened for potential safety concerns before a response is generated
             </p>
 
           </section>
@@ -1127,6 +1186,7 @@ function App() {
                   <p>Checking your message before continuing...</p>
                 </div>
               )}
+              <div className='message-end' ref={messageEndRef} />
             </div>
 
             <form
@@ -1180,8 +1240,8 @@ function App() {
             </form>
 
             <p className='conversation-footer'>
-              Your messages should be screened for potential safety
-              concerns before an AI response is generated.
+              Your messages are screened for potential safety concerns
+              before an AI response is generated.
             </p>
           </section>
         </main>
@@ -1823,31 +1883,31 @@ function App() {
 
   // ADMIN DASHBOARD
   // BACKEND INTEGRATION:
-  // Replace SAMPLE_ADMIN_ANALYTICS with data returned by
-  // protected admin-only backend endpoints.
+  // Data from GET /api/admin/analytics, /api/admin/logs and /api/health (admin-only).
   //
   // IMPORTANT:
-  // The backend must verify that the authenticated user is an admin.
+  // The backend verifies that the authenticated user is an admin.
   // The frontend is not the security boundary and role checking here is only for prototype UI.
-  // Do not display raw conversation messages here.
+  // Raw conversation messages are never displayed here.
 
   if (currentScreen === 'admin' && userRole === 'admin') {
 
-    const adminAnalytics = SAMPLE_ADMIN_ANALYTICS
+    const adminAnalytics = adminAnalyticsData || EMPTY_ADMIN_ANALYTICS
+    const aiUsage = adminAnalytics.aiUsage
 
-    // Architecture Health: this page loaded, so the frontend is healthy; backend,
-    // database and logging come from GET /api/health. Safety and AI are not connected yet.
+    // Architecture Health: this page loaded, so the frontend is healthy; the other
+    // layers (API, database, logging, safety, AI) come from GET /api/health.
     const architectureHealth = [
       { name: 'Frontend', status: 'Healthy' },
-      ...healthServices,
-      { name: 'Safety / Moderation', status: 'Not connected yet' },
-      { name: 'AI Service', status: 'Not connected yet' }
+      ...healthServices
     ]
 
     const maxDayCount = Math.max(
       1,
       ...adminAnalytics.weekdays.map((item) => item.count)
     )
+    const maxDayTokens = Math.max(1, ...aiUsage.daily.map((item) => item.inputTokens + item.outputTokens))
+    const maxDayCost = Math.max(0.000001, ...aiUsage.daily.map((item) => item.cost))
 
     return (
       <div className='app'>
@@ -1869,6 +1929,10 @@ function App() {
             <p>
               System usage, safety monitoring, and application health
             </p>
+
+            {screenLoading && (
+              <p className='status-text' role='status'>Loading dashboard data...</p>
+            )}
 
           </header>
 
@@ -2004,98 +2068,128 @@ function App() {
             <h2>Cost &amp; AI Usage</h2>
 
             <p className='analytics-intro'>
-              AI token consumption and estimated costs.
-              Values will be available after backend integration.
+              AI token consumption and estimated cost over the last 7 days
+              ({aiUsage.configured ? `model: ${aiUsage.model}` : 'AI not configured'}).
+              Crisis and support templates use no AI, so they cost nothing.
             </p>
 
             <div className='analytics-summary-grid'>
 
               <article className='analytics-stat-card'>
-
-                <span className='analytics-stat-label'>
-                  Estimated AI Cost
-                </span>
-
-                <strong className='analytics-stat-number'>
-                  —
-                </strong>
-
+                <span className='analytics-stat-label'>Estimated AI Cost</span>
+                <strong className='analytics-stat-number'>{formatUsd(aiUsage.estimatedCost)}</strong>
                 <span className='analytics-stat-description'>
-                  Reporting period: Last 7 Days
+                  {formatUsd(aiUsage.avgCostPerRequest)} per AI reply on average
                 </span>
-
               </article>
 
               <article className='analytics-stat-card'>
-
-                <span className='analytics-stat-label'>
-                  Total Tokens
-                </span>
-
-                <strong className='analytics-stat-number'>
-                  —
-                </strong>
-
-                <span className='analytics-stat-description'>
-                  Input and output tokens
-                </span>
-
+                <span className='analytics-stat-label'>Total Tokens</span>
+                <strong className='analytics-stat-number'>{formatNumber(aiUsage.totalTokens)}</strong>
+                <span className='analytics-stat-description'>Input and output tokens</span>
               </article>
 
               <article className='analytics-stat-card'>
-
-                <span className='analytics-stat-label'>
-                  AI Requests
-                </span>
-
-                <strong className='analytics-stat-number'>
-                  —
-                </strong>
-
+                <span className='analytics-stat-label'>AI Requests</span>
+                <strong className='analytics-stat-number'>{formatNumber(aiUsage.requests)}</strong>
                 <span className='analytics-stat-description'>
-                  Requests processed
+                  Average reply time {(aiUsage.avgLatencyMs / 1000).toFixed(1)} s
                 </span>
-
               </article>
 
               <article className='analytics-stat-card'>
-
-                <span className='analytics-stat-label'>
-                  Budget Utilization
-                </span>
-
+                <span className='analytics-stat-label'>Budget Utilization</span>
                 <strong className='analytics-stat-number'>
-                  —
+                  {aiUsage.budgetUtilization === null ? '—' : `${aiUsage.budgetUtilization}%`}
                 </strong>
-
                 <span className='analytics-stat-description'>
-                  Requires a configured budget
+                  {aiUsage.monthlyBudget === null
+                    ? `No monthly budget set (${formatUsd(aiUsage.monthToDateCost)} this month)`
+                    : `${formatUsd(aiUsage.monthToDateCost)} of ${formatUsd(aiUsage.monthlyBudget)} this month`}
                 </span>
-
               </article>
 
+            </div>
+
+            {/* TOKEN CONSUMPTION AND COST PER DAY */}
+            <h3 className='analytics-subheading'>Tokens per Day</h3>
+            <div className='frequency-chart'>
+              {aiUsage.daily.map((item) => (
+                <div className='frequency-row' key={`tokens-${item.day}`}>
+                  <span>{item.day}</span>
+                  <div
+                    className='frequency-bar token-bar'
+                    role='img'
+                    aria-label={`${item.inputTokens} input and ${item.outputTokens} output tokens`}
+                  >
+                    <div
+                      className='token-bar-input'
+                      style={{ width: `${(item.inputTokens / maxDayTokens) * 100}%` }}
+                    ></div>
+                    <div
+                      className='token-bar-output'
+                      style={{ width: `${(item.outputTokens / maxDayTokens) * 100}%` }}
+                    ></div>
+                  </div>
+                  <strong>{formatNumber(item.inputTokens + item.outputTokens)}</strong>
+                </div>
+              ))}
+            </div>
+            <p className='chart-legend'>
+              <span className='legend-swatch token-bar-input'></span> Input tokens
+              <span className='legend-swatch token-bar-output'></span> Output tokens
+            </p>
+
+            <h3 className='analytics-subheading'>Estimated Cost per Day</h3>
+            <div className='frequency-chart'>
+              {aiUsage.daily.map((item) => (
+                <div className='frequency-row' key={`cost-${item.day}`}>
+                  <span>{item.day}</span>
+                  <div className='frequency-bar' aria-hidden='true'>
+                    <div
+                      className='frequency-bar-fill'
+                      style={{ width: `${(item.cost / maxDayCost) * 100}%` }}
+                    ></div>
+                  </div>
+                  <strong>{formatUsd(item.cost)}</strong>
+                </div>
+              ))}
             </div>
 
             <div className='tool-usage-list'>
 
               <div className='tool-usage-item'>
                 <span>Input Tokens</span>
-                <strong>Pending integration</strong>
+                <strong>{formatNumber(aiUsage.inputTokens)}</strong>
               </div>
 
               <div className='tool-usage-item'>
                 <span>Output Tokens</span>
-                <strong>Pending integration</strong>
+                <strong>{formatNumber(aiUsage.outputTokens)}</strong>
               </div>
 
+              {aiUsage.byModel.length === 0 && (
+                <div className='tool-usage-item'>
+                  <span>Cost by AI Model</span>
+                  <strong>No AI requests yet</strong>
+                </div>
+              )}
+
+              {aiUsage.byModel.map((item) => (
+                <div className='tool-usage-item' key={item.model}>
+                  <span>Cost by AI Model: {item.model}</span>
+                  <strong>{formatUsd(item.cost_usd)} ({formatNumber(item.requests)} requests)</strong>
+                </div>
+              ))}
+
               <div className='tool-usage-item'>
-                <span>Cost by AI Model</span>
-                <strong>Pending integration</strong>
+                <span>Replies Without AI (reviewed templates)</span>
+                <strong>{formatNumber(aiUsage.repliesWithoutAI)}</strong>
               </div>
 
               <div className='tool-usage-item'>
                 <span>RAG and Embedding Usage</span>
-                <strong>Pending integration</strong>
+                <strong>Not used</strong>
               </div>
 
             </div>
@@ -2186,6 +2280,18 @@ function App() {
 
               </article>
 
+              <article className='analytics-stat-card'>
+                <span className='analytics-stat-label'>Crisis</span>
+                <strong className='analytics-stat-number'>{adminAnalytics.crisisEscalations}</strong>
+                <span className='analytics-stat-description'>Crisis screen and resources, no AI</span>
+              </article>
+
+              <article className='analytics-stat-card'>
+                <span className='analytics-stat-label'>Support</span>
+                <strong className='analytics-stat-number'>{adminAnalytics.supportEscalations}</strong>
+                <span className='analytics-stat-description'>Reply shown with support resources</span>
+              </article>
+
             </div>
 
           </section>
@@ -2199,6 +2305,8 @@ function App() {
 
             <p className='analytics-intro'>
               Results from safety screening across all users.
+              {' '}Sensitive topics answered with a boundary: {adminAnalytics.boundaryReplies}.
+              AI replies blocked by the output check: {adminAnalytics.repliesBlocked}.
             </p>
 
 
@@ -2267,12 +2375,13 @@ function App() {
 
             <p className='analytics-intro'>
               Completed guided exercises across all users.
+              Sample data: coping-tool usage is not stored by the backend yet.
             </p>
 
 
             <div className='tool-usage-list'>
 
-              {adminAnalytics.copingTools.map((tool) => (
+              {SAMPLE_COPING_TOOLS.map((tool) => (
 
                 <div
                   className='tool-usage-item'
@@ -2325,7 +2434,7 @@ function App() {
                   </span>
 
                   <strong>
-                    {layer.status}
+                    {layer.status}{layer.detail ? ` (${layer.detail})` : ''}
                   </strong>
 
                 </div>
@@ -2492,6 +2601,7 @@ function App() {
                   </p>
                 </div>
               )}
+              <div className='message-end' ref={messageEndRef} />
             </div>
 
 
@@ -2552,8 +2662,8 @@ function App() {
             </form>
 
             <p className='conversation-footer'>
-              Your messages should be screened for potential safety
-              concerns before an AI response is generated.
+              Your messages are screened for potential safety concerns
+              before an AI response is generated.
             </p>
           </section>
         </main>
@@ -2615,18 +2725,25 @@ function App() {
               <p>Consider contacting a trusted friend, family member, caregiver or someone who can support you.</p>
             </div>
 
-            {/* END SESSION */}
+            {/* GO BACK / END SESSION
+                After a crisis reply the user can return to the conversation (the
+                reply and resources are still there) or end the session. */}
             <div className='support-actions'>
-              <button className='secondary-button'
-                type='button'
-                onClick={() => {
-                  setMessages([])
-                  setMessage('')
-                  setActiveConversationId(null)
-                  setSafetyChecking(false)
-                  setCurrentScreen('home')
-                }}>End Session
-              </button>
+              {returnScreen !== 'support-resources' && (
+                <button className='primary-button'
+                  type='button'
+                  onClick={() => setCurrentScreen(returnScreen)}>
+                  {CHAT_SCREENS.includes(returnScreen)
+                    ? 'Back to Conversation'
+                    : returnScreen === 'login' ? 'Back to Sign In' : 'Go Back'}
+                </button>
+              )}
+              {currentUser && (
+                <button className='secondary-button'
+                  type='button'
+                  onClick={endSession}>End Session
+                </button>
+              )}
             </div>
           </section>
         </main>
@@ -2678,7 +2795,7 @@ function App() {
               <button
                 className='primary-button'
                 type='button'
-                onClick={() => setCurrentScreen('conversation')}
+                onClick={() => setCurrentScreen(CHAT_SCREENS.includes(returnScreen) ? returnScreen : 'conversation')}
               >
                 Try Again
               </button>
@@ -2694,12 +2811,7 @@ function App() {
               <button
                 className='secondary-button'
                 type='button'
-                onClick={() => {
-                  setMessages([])
-                  setMessage('')
-                  setActiveConversationId(null)
-                  setCurrentScreen('home')
-                }}
+                onClick={endSession}
               >
                 End Session
               </button>

@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class ServiceStatus(BaseModel):
     name: str
     status: str
+    detail: str | None = None
 
 
 class HealthResponse(BaseModel):

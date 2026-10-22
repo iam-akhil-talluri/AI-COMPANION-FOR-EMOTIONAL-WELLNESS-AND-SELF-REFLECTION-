@@ -17,7 +17,9 @@ CHAT_ERRORS = {
     404: {"model": ErrorResponse, "description": "Session not found"},
     422: {"model": ErrorResponse, "description": "Empty or too-long message"},
     429: {"model": ErrorResponse, "description": "Rate limit or conversation length limit reached"},
-    503: {"model": ErrorResponse, "description": "No reply available (fails closed)"},
+    503: {"model": ErrorResponse,
+          "description": "safety_unavailable: the safety check could not run, so the message was not sent "
+                         "(fails closed). reply_unavailable: the AI could not reply."},
 }
 
 
@@ -57,6 +59,7 @@ def remove_session(conversation: ConversationSession = Depends(owned_session),
 @router.post("/{session_id}/messages", response_model=ChatResponse, responses=CHAT_ERRORS)
 def post_message(body: MessageCreate, conversation: ConversationSession = Depends(owned_session),
                  db: Session = Depends(get_db)) -> ChatResponse:
-    """Send a message and return the reply."""
+    """Send a message. It is safety-checked before any AI call, and the reply is checked before it is returned."""
     outcome = send_message(db, conversation, body.content)
-    return ChatResponse(session_id=outcome.session_id, response=outcome.response, created_at=outcome.created_at)
+    return ChatResponse(session_id=outcome.session_id, status=outcome.status, response=outcome.response,
+                        risk_level=outcome.risk_level, resources=outcome.resources, created_at=outcome.created_at)

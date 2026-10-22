@@ -1,5 +1,10 @@
 # Handoff for Emmanuel: connecting safety and AI to the backend
 
+> **Status: implemented.** The safety and AI layer described below now exists and is registered
+> (`app/services/companion.py`). See [`ai-and-safety.md`](ai-and-safety.md) for the design and
+> [`ai-response-evaluation.md`](ai-response-evaluation.md) for the live evaluation. Every checklist item in
+> section 8 is done except verifying the crisis phone numbers with the team before the demo.
+
 From: Akhil (backend, database, sessions and conversation memory, logging, deployment support)
 
 The backend is in `backend/`. It handles accounts, sessions, conversation memory, logging and health checks.

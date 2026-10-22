@@ -15,11 +15,14 @@ IT 7993 Capstone, Fall 2026. Sponsor: Capgemini America, Inc. Team P05-01.
 - **Operational logging**: what happened (event type, level), never what anyone wrote. Admins read it at `GET /api/admin/logs`.
 - Rate limits, length limits, one error format, security headers, request IDs, Alembic migrations, health check, Docker image.
 
-## Reply provider (integration point)
+## Safety and AI layer
 
-The backend does not write replies itself. `app/services/reply_provider.py` is where the safety and AI layer
-plugs in with `set_reply_provider()`. Until a provider is registered, `POST /api/sessions/{id}/messages`
-**fails closed**: it answers `503 reply_unavailable` and stores nothing.
+Every message goes through `app/services/companion.py`, registered as the reply provider in `create_app()`:
+input safety check (rules + OpenAI Moderation) → escalation decision → AI reply (OpenAI `gpt-4o-mini`) or a
+reviewed crisis/support template → output check. If the safety check cannot run, the API **fails closed** with
+`503 safety_unavailable` and nothing reaches the AI or the database. Set `OPENAI_API_KEY` in `.env` (never commit
+it). Design, escalation table, prompt strategy, cost and validation: [`docs/ai-and-safety.md`](docs/ai-and-safety.md).
+Live evaluation against the real model: `python -m scripts.evaluate_ai`.
 
 ## Quick start (local)
 

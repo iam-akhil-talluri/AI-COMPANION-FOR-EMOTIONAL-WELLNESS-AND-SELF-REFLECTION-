@@ -1,0 +1,46 @@
+{
+  "_note": "Reviewed support resources (United States). Verify every number with the team before each demo. kind: crisis = suicidal intent, self-harm or immediate danger; abuse = abuse disclosure; support = distress, isolation or worry about someone.",
+  "resources": {
+    "988": {
+      "name": "988 Suicide & Crisis Lifeline",
+      "description": "Call or text 988, any time, to talk with a trained crisis counselor.",
+      "action_label": "Call 988",
+      "href": "tel:988"
+    },
+    "crisis_text_line": {
+      "name": "Crisis Text Line",
+      "description": "Text HOME to 741741 to connect with a trained crisis counselor.",
+      "action_label": "Text HOME",
+      "href": "sms:741741?body=HOME"
+    },
+    "emergency": {
+      "name": "Emergency Services",
+      "description": "If you or someone else is in immediate danger, call 911.",
+      "action_label": "Call 911",
+      "href": "tel:911"
+    },
+    "domestic_violence": {
+      "name": "National Domestic Violence Hotline",
+      "description": "Call 1-800-799-7233 or text START to 88788 for confidential support.",
+      "action_label": "Call hotline",
+      "href": "tel:18007997233"
+    },
+    "rainn": {
+      "name": "RAINN Sexual Assault Hotline",
+      "description": "Call 1-800-656-4673 for confidential support from a trained staff member.",
+      "action_label": "Call RAINN",
+      "href": "tel:18006564673"
+    },
+    "nami": {
+      "name": "NAMI HelpLine",
+      "description": "Call 1-800-950-6264 for information, resources and support (not a crisis line).",
+      "action_label": "Call NAMI",
+      "href": "tel:18009506264"
+    }
+  },
+  "sets": {
+    "crisis": ["988", "crisis_text_line", "emergency"],
+    "abuse": ["emergency", "domestic_violence", "rainn", "988"],
+    "support": ["988", "crisis_text_line", "nami"]
+  }
+}

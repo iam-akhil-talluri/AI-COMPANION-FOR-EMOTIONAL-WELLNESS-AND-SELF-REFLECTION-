@@ -2289,3 +2289,114 @@ input:disabled {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* =========================================
+   SAFETY RESPONSES AND AI USAGE CHARTS (safety and AI integration)
+   ========================================= */
+
+/* Keep line breaks the AI or a reviewed template put in a reply */
+.message p {
+  white-space: pre-line;
+}
+
+/* Support resources shown under a `support` or `crisis` reply */
+.message-resources {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--tp-border);
+}
+
+.message-resources > strong {
+  color: var(--tp-deep);
+  font-size: 14px;
+}
+
+.message-resource {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--tp-white);
+}
+
+.message-resource-name {
+  display: block;
+  color: var(--tp-deep);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.message-resource-description {
+  display: block;
+  color: var(--tp-muted);
+  font-size: 13px;
+}
+
+.message-resource .support-resource-button {
+  min-width: 96px;
+  min-height: 40px;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+/* Token and cost charts in Cost & AI Usage */
+.analytics-subheading {
+  margin: 24px 0 4px;
+  color: var(--tp-deep);
+  font-size: 16px;
+}
+
+.token-bar {
+  display: flex;
+}
+
+.token-bar-input,
+.token-bar-output {
+  height: 100%;
+  transform-origin: left center;
+  animation: tp-bar-grow 0.7s ease-out;
+}
+
+.token-bar-input {
+  background: var(--tp-sea);
+}
+
+.token-bar-output {
+  background: var(--tp-deep);
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin: 8px 0 0;
+  color: var(--tp-muted);
+  font-size: 13px;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: -8px;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
+@media (max-width: 600px) {
+  .message-resource {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* Scroll anchor after the last message: stops above the sticky message box */
+.message-end {
+  scroll-margin-bottom: 110px;
+}

@@ -40,8 +40,22 @@ class MessageCreate(BaseModel):
     content: str = Field(min_length=1, max_length=20000)
 
 
+class SupportResource(BaseModel):
+    """A reviewed support resource (helpline or emergency service)."""
+
+    id: str
+    name: str
+    description: str
+    action_label: str
+    href: str
+
+
 class ChatResponse(BaseModel):
     session_id: str
-    status: Literal["ok"] = "ok"
+    # ok: normal reply. support: also show `resources`. crisis: open the crisis resources screen.
+    status: Literal["ok", "support", "crisis"] = "ok"
     response: str
+    # Risk level from the safety check (low | moderate | elevated | high); null if not checked.
+    risk_level: Literal["low", "moderate", "elevated", "high"] | None = None
+    resources: list[SupportResource] = Field(default_factory=list)
     created_at: datetime

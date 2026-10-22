@@ -14,6 +14,7 @@ from app.errors import register_error_handlers
 from app.logging_config import configure_logging
 from app.middleware import RequestGuardMiddleware, SecurityHeadersMiddleware
 from app.services import reply_provider
+from app.services.companion import companion_reply
 from app.services.retention import retention_loop
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,9 @@ async def lifespan(app: FastAPI):
     configure_logging(settings.log_level)
     if not reply_provider.is_configured():
         logger.warning("No reply provider is registered: sending a message will return 503 until one is")
+    if not settings.ai_configured:
+        logger.warning("OPENAI_API_KEY is not set: everyday messages will return 503 reply_unavailable; "
+                       "crisis and support messages still get the reviewed response")
     retention_task = None
     if settings.retention_days > 0 and settings.retention_interval_hours > 0:
         retention_task = asyncio.create_task(retention_loop(settings))
@@ -40,7 +44,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     docs = settings.api_docs_enabled
     app = FastAPI(
         title="AI Companion for Emotional Wellness & Self-Reflection",
-        description="Backend API: accounts, conversation sessions and memory, logging and health checks. "
+        description="Backend API: accounts, conversation sessions and memory, safety-checked AI replies, "
+        "logging, analytics and health checks. "
         "This system is not therapy, medical care, diagnosis, or crisis intervention.",
         version="1.0.0",
         lifespan=lifespan,
@@ -66,6 +71,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     register_error_handlers(app)
     for router in (health.router, auth.router, sessions.router, logs.router):
         app.include_router(router)
+
+    # Every message goes through the safety layer before any AI call (app/services/companion.py).
+    reply_provider.set_reply_provider(companion_reply)
     return app
 
 

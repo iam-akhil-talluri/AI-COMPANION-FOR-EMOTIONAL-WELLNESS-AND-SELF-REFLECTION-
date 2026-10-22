@@ -27,14 +27,17 @@ teammate. It closes the setup, account, session, messaging and admin-log gaps li
 | Continue a saved session (loads its messages) | **Connected** | `GET /api/sessions/{id}` |
 | Delete a session | **Connected** | `DELETE /api/sessions/{id}` |
 | Admin: Recent Log Events | **Connected** | `GET /api/admin/logs` |
-| Admin: Architecture Health (Frontend, Backend / API, Database, Logging) | **Connected** | `GET /api/health` |
-| AI replies and safety screening | Not connected: Emmanuel's part | (reply provider in the backend) |
-| My Insights, admin statistics and cost cards | Not connected: no endpoint (Korey) | — |
+| Admin: Architecture Health (all six layers) | **Connected** | `GET /api/health` |
+| AI replies and safety screening (support resources, crisis routing, Safety Check Unavailable) | **Connected** | `POST /api/sessions/{id}/messages` (see `ai-and-safety.md`) |
+| Admin: Overview, Session Frequency, Escalations, Safety Decisions, Cost & AI Usage (with token and cost charts) | **Connected** | `GET /api/admin/analytics` |
+| My Insights, admin Coping Tool Activity | Not connected: no endpoint (Korey) | — |
 | Journal save, coping-tool counts | Not connected: no endpoint | — |
 
-**Until Emmanuel's safety and AI layer is plugged into the backend, every message gets the notice "The companion
-can't reply right now".** Nothing is saved, and the user's text is put back in the input. Everything else in the table
-works today.
+**Update (safety and AI layer connected):** replies now come from the companion pipeline. `support` replies show
+support resource cards under the reply, `crisis` replies open the Support & Crisis Resources screen (with a "Back to
+Conversation" button), and `503 safety_unavailable` opens the Safety Check Unavailable screen, whose "Try Again"
+returns to the screen the message came from with the text restored. Sections below that describe the state before
+this are kept for history.
 
 ## 2. Files changed
 
