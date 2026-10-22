@@ -1,49 +1,89 @@
 /*
-  FRONTEND SERVICE
+  CHAT SERVICE
 
-  This file simulates the response from our future FastAPI backend.
-  Later, we will replace this mock function with a real API request.
+  Sessions, conversation history and sending messages, through the FastAPI backend.
 
-  The backend will be responsible for safety screening,
-  scope classification, and generating wellness responses.
+  Flow for every message:
+  React → POST /api/sessions/{id}/messages → backend saves the message and the
+  reply → React
+
+  Replies come from the backend's reply provider (the safety and AI layer).
+  Until that layer is connected, the backend answers 503 reply_unavailable and
+  stores nothing; the screens show that as a notice and keep the user's text.
 */
 
-export async function sendMessageToBackend(userMessage) {
-  // MOCK ONLY: Simulate a short backend response delay.
-  await new Promise((resolve) => setTimeout(resolve, 500))
+import { apiRequest } from './apiClient'
 
-  const text = userMessage.toLowerCase()
+// Backend limit (MAX_MESSAGE_CHARS).
+export const MAX_MESSAGE_LENGTH = 2000
 
-  // MOCK TEST: A direct recipe request is out of scope.
-  if (
-    text.includes('recipe') ||
-    text.includes('how do i cook')
-  ) {
-    return {
-      status: 'out_of_scope',
-      message:
-        "I'm here to support emotional wellness, self-reflection, and coping strategies. I can't help with recipes, but we could explore how you're feeling."
-    }
-  }
-
-  // MOCK TEST: An emotional message mentioning food stays in scope.
-  if (
-    text.includes('stressed') ||
-    text.includes('stress') ||
-    text.includes('upset') ||
-    text.includes('sad')
-  ) {
-    return {
-      status: 'ok',
-      message:
-        "It sounds like you're feeling stressed. Would you like to talk about what's making today difficult?"
-    }
-  }
-
-  // MOCK DEFAULT: Replace this with the real AI response.
+// API messages use `content`; the screens use `text`.
+function toUiMessage(message) {
   return {
-    status: 'ok',
-    message:
-      'What has been on your mind today?'
+    id: message.id,
+    role: message.role,
+    text: message.content,
+    createdAt: message.created_at
+  }
+}
+
+export function formatSessionDate(isoDate) {
+  return new Date(isoDate).toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  })
+}
+
+function toUiSession(session) {
+  return {
+    id: session.id,
+    type: session.type,
+    date: formatSessionDate(session.last_active),
+    title: session.title || (session.type === 'reflection' ? 'Reflection' : 'Conversation'),
+    prompt: session.prompt,
+    messageCount: session.message_count
+  }
+}
+
+export async function createSession({ type = 'conversation', prompt = null, title = null } = {}) {
+  const session = await apiRequest('/api/sessions', {
+    method: 'POST',
+    body: { type, prompt, title }
+  })
+  return toUiSession(session)
+}
+
+export async function listSessions() {
+  const sessions = await apiRequest('/api/sessions?limit=100')
+  return sessions.map(toUiSession)
+}
+
+export async function getSession(sessionId) {
+  const session = await apiRequest(`/api/sessions/${encodeURIComponent(sessionId)}`)
+  return {
+    ...toUiSession(session),
+    messages: session.messages.map(toUiMessage)
+  }
+}
+
+export async function deleteSession(sessionId) {
+  await apiRequest(`/api/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' })
+}
+
+/*
+  Sends one message and returns { status: 'ok', message } with the reply.
+  Every failure (no reply available, rate limit, length limit, expired sign-in,
+  network) throws an ApiError whose message is safe to show in the conversation.
+*/
+export async function sendMessageToBackend(sessionId, userMessage) {
+  const data = await apiRequest(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, {
+    method: 'POST',
+    body: { content: userMessage }
+  })
+
+  return {
+    status: data.status,
+    message: data.response
   }
 }

@@ -2176,6 +2176,83 @@ input:disabled {
 
 
 /* =========================================
+   ACCOUNTS, STATUS AND NOTICES (backend integration)
+   ========================================= */
+
+.login-form button:disabled,
+.primary-button:disabled,
+.session-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.form-hint {
+  margin: -6px 0 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--tp-muted);
+}
+
+.login-switch {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--tp-text);
+}
+
+.link-button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--tp-sea-text);
+  font-size: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.link-button:focus-visible {
+  outline: 2px solid var(--tp-sea);
+  outline-offset: 2px;
+}
+
+.status-text {
+  margin: 8px 0;
+  color: var(--tp-muted);
+  text-align: center;
+}
+
+/* A system notice inside the conversation (e.g. no reply available) */
+.message.notice-message {
+  border: 1px solid var(--tp-shell);
+  background: #fff4ed;
+}
+
+/* History: delete next to Continue */
+.session-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.session-delete-button {
+  padding: 8px 12px;
+  border: 1px solid var(--tp-shell);
+  border-radius: var(--tp-radius-small);
+  background: var(--tp-white);
+  color: var(--tp-deep);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.session-delete-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+
+
+/* =========================================
    RESPONSIVE: SMALL PHONES
    ========================================= */
 
