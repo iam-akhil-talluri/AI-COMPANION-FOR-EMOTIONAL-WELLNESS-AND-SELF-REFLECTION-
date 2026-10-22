@@ -25,3 +25,8 @@ dist-ssr
 
 src/App_complete.jsx
 src/App_full_working.jsx
+
+# Environment files (secrets). Only the templates are committed.
+.env
+.env.*
+!.env.example

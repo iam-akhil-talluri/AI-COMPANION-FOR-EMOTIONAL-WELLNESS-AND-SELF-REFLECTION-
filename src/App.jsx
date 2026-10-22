@@ -10,45 +10,43 @@
 BACKEND / AI INTEGRATION MAP
 ============================================================
 
-1. AUTHENTICATION
-   Current: prototype login only.
-   Later: React → FastAPI authentication → authenticated user/session.
+Requests go to the FastAPI backend through src/services/.
+The backend is the security boundary: it checks the signed-in user,
+the admin role and session ownership on every request.
+Full details: backend/docs/frontend-integration.md
 
-2. CONVERSATIONS
-   Current: messages live in React state.
-   Later: POST /sessions and POST /sessions/{session_id}/messages.
+1. AUTHENTICATION (services/authService.js)            CONNECTED
+   POST /api/auth/login, POST /api/auth/register, GET /api/auth/me,
+   POST /api/auth/logout. Pseudonymous accounts: username + password only.
+   "Sign in as Administrator" sends admin: true; the server answers 403
+   if the account is not an administrator.
 
-3. SAFETY / MODERATION
-   Current: setTimeout + hard-coded safetyResult.
-   Later: React → FastAPI → safety/moderation service.
-   Possible results: clear, concern, error.
-   IMPORTANT: error must fail closed; do not send the unchecked
-   message to the conversational AI.
+2. CONVERSATIONS (services/chatService.js)              CONNECTED
+   POST /api/sessions and POST /api/sessions/{session_id}/messages.
 
-4. CONVERSATIONAL AI
-   Current: hard-coded mock response.
-   Later: only safety-approved messages are sent to the AI service.
-   AI response returns through the backend to React.
+3. SAFETY / MODERATION                                  NOT YET (Emmanuel)
+   Will run inside the backend before any AI call. Until it is connected
+   the backend answers 503 reply_unavailable and stores nothing, so no
+   message reaches an AI unscreened.
 
-5. CONVERSATION HISTORY
-   Current: sample conversationSessions array.
-   Later: GET /sessions and GET /sessions/{session_id}.
-   Only the authenticated user's sessions may be returned.
+4. CONVERSATIONAL AI                                    NOT YET (Emmanuel)
+   Replies come from the backend's reply provider.
 
-6. MESSAGE PERSISTENCE
-   Current: React state only.
-   Later: PostgreSQL stores sessions and messages.
+5. CONVERSATION HISTORY (services/chatService.js)       CONNECTED
+   GET /api/sessions, GET /api/sessions/{session_id},
+   DELETE /api/sessions/{session_id}. Only the signed-in user's sessions.
 
-7. ANALYTICS / OPERATIONAL LOGGING
-   Current: sample implemented in this frontend.
-   Later: backend records session ID, architecture layer,
-   safety decision, status, errors, and approved operational metrics.
-   Raw conversation messages should not be exposed in admin analytics.
+6. MESSAGE PERSISTENCE                                  CONNECTED
+   MySQL stores sessions and messages (deleted after the retention period).
+
+7. ANALYTICS / OPERATIONAL LOGGING (services/adminService.js)
+   Admin "Recent Log Events": GET /api/admin/logs      CONNECTED
+   Admin "Architecture Health": GET /api/health        CONNECTED (3 rows)
+   My Insights and the other admin cards               SAMPLE DATA (no endpoint yet)
 
 8. COPING TOOLS
-   Current: static frontend content.
-   Later: these remain static/reviewed content and do not need
-   conversational AI to generate the exercise.
+   Static, reviewed frontend content; no AI. Journal entries and tool
+   counts are not stored yet (no backend endpoint).
 
 ============================================================
 */
@@ -56,32 +54,42 @@ BACKEND / AI INTEGRATION MAP
 
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
+import { onUnauthorized } from './services/apiClient'
+import { register, restoreSession, signIn, signOut } from './services/authService'
+import {
+  MAX_MESSAGE_LENGTH,
+  createSession,
+  deleteSession,
+  getSession,
+  listSessions,
+  sendMessageToBackend
+} from './services/chatService'
+import { formatLogTime, getHealth, getRecentLogs } from './services/adminService'
 
-const ANALYTICS_STORAGE_KEY = 'wellnessCompanionAnalytics'
+const CONVERSATION_STARTER = 'What would you like to talk about today?'
 
-function getAnalyticsData() {
-  try {
-    const savedData = localStorage.getItem(ANALYTICS_STORAGE_KEY)
+// One message bubble. role: user | assistant | notice (a system message, e.g. "no reply available").
+function MessageBubble({ item }) {
+  const className =
+    item.role === 'user'
+      ? 'message user-message'
+      : item.role === 'notice'
+        ? 'message assistant-message notice-message'
+        : 'message assistant-message'
 
-    return savedData
-      ? JSON.parse(savedData)
-      : { visits: [], conversations: [] }
-  } catch {
-    return { visits: [], conversations: [] }
-  }
-}
+  const label =
+    item.role === 'user' ? 'You' : item.role === 'notice' ? 'Notice' : 'AI Companion'
 
-function saveAnalyticsData(data) {
-  localStorage.setItem(
-    ANALYTICS_STORAGE_KEY,
-    JSON.stringify(data)
+  return (
+    <div className={className}>
+      <span className='message-label'>{label}</span>
+      <p>{item.text}</p>
+    </div>
   )
 }
 
-import { sendMessageToBackend } from './services/chatService'
-
 //MY ANALYTICS: Prototype Sample Data
-//BACKEND INTEGRATION: replace with GET /analytics/me for the USer
+//BACKEND INTEGRATION: no endpoint yet (GET /api/analytics/me is planned, owner: Korey)
 const SAMPLE_ANALYTICS = {
   totalSessions: 12,
   sessionsThisWeek: 4,
@@ -108,8 +116,9 @@ const SAMPLE_ANALYTICS = {
 
 // ADMIN DASHBOARD SAMPLE DATA
 // BACKEND INTEGRATION:
-// Replace this sample data with information returned by
-// protected admin-only backend endpoints.
+// Recent Log Events and Architecture Health now come from the backend
+// (GET /api/admin/logs, GET /api/health). The other cards have no
+// endpoint yet and keep this sample data.
 //
 // IMPORTANT:
 // The backend must verify the admin role.
@@ -194,34 +203,32 @@ const SAMPLE_ADMIN_ANALYTICS = {
 
 
 function App() {
-  const [currentScreen, setCurrentScreen] = useState('login')
-  //const [currentScreen, setCurrentScreen] = useState('safety-error')
+  // 'loading' while a saved sign-in is checked with the backend
+  const [currentScreen, setCurrentScreen] = useState('loading')
   const [adminLogin, setAdminLogin] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [userRole, setUserRole] = useState(null)
+  const [currentUser, setCurrentUser] = useState(null)
+  // 'signin' or 'register' (create a pseudonymous account)
+  const [authMode, setAuthMode] = useState('signin')
+  const [authBusy, setAuthBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState([])
   const [activeConversationId, setActiveConversationId] = useState(null)
   const [reflectionMessage, setReflectionMessage] = useState('')
   const [reflectionMessages, setReflectionMessages] = useState([])
   const [reflectionSafetyChecking, setReflectionSafetyChecking] = useState(false)
+  // The open reflection or continued session (from the backend: id, type, title, prompt, ...)
   const [selectedSession, setSelectedSession] = useState(null)
-  // BACKEND INTEGRATION:
-  // selectedSession will eventually come from the authenticated user's
-  // saved sessions returned by the backend.
+  // Shows the "Checking your message" state while the backend request runs.
   const [safetyChecking, setSafetyChecking] = useState(false)
-  // SAFETY BACKEND INTEGRATION:
-  // Currently this is only a frontend loading state.
-  // The real safety/moderation API will control the result.
-  const [safetyStatus, setSafetyStatus] = useState('clear')
-  // SAFETY BACKEND INTEGRATION:
-  // Prototype values: clear, checking, concern, error.
-  // The backend safety/moderation service will return the actual result.
   const [continueMessage, setContinueMessage] = useState('')
   const [continueMessages, setContinueMessages] = useState([])
   const [previousScreen, setPreviousScreen] = useState('home')
   const [continueSafetyChecking, setContinueSafetyChecking] = useState(false)
-  const [conversationStarter, setConversationStarter] = useState('What would you like to talk about today')
+  const [conversationStarter, setConversationStarter] = useState(CONVERSATION_STARTER)
+  // Error shown on a screen when an action could not start (e.g. network down).
+  const [screenNotice, setScreenNotice] = useState('')
 
   const reflectionPrompts = [
     'What has been on your mind most today?',
@@ -234,27 +241,119 @@ function App() {
     'What is one thing you wish you could pause and give yourself time to consider?'
   ]
   const [reflectionPrompt, setReflectionPrompt] = useState(reflectionPrompts[0])
+  const [startingReflection, setStartingReflection] = useState(false)
   const [breathingActive, setBreathingActive] = useState(false)
   const [breathingPhase, setBreathingPhase] = useState('Inhale')
   const [breathingCount, setBreathingCount] = useState(4)
   const countRef = useRef(4)
 
+  // Data loaded from the backend for the History screen and the Admin Dashboard.
+  const [conversationSessions, setConversationSessions] = useState([])
+  const [recentLogs, setRecentLogs] = useState([])
+  const [healthServices, setHealthServices] = useState([])
+  // Which data screen finished loading last, and its error message if it failed.
+  const [loadedScreen, setLoadedScreen] = useState({ screen: null, error: '' })
+  const [openingSessionId, setOpeningSessionId] = useState(null)
+  const [deletingSessionId, setDeletingSessionId] = useState(null)
+  const [historyError, setHistoryError] = useState('')
+  const screenLoading = ['history', 'admin'].includes(currentScreen) && loadedScreen.screen !== currentScreen
+  const screenLoadError = loadedScreen.screen === currentScreen ? loadedScreen.error : ''
+
+  // COPING TOOL USAGE
+  // Counted in this browser tab only: the backend has no coping-usage endpoint yet.
+  const [copingUsage, setCopingUsage] = useState({
+    journaling: 0,
+    grounding: 0,
+    breathing: 0
+  })
+
+  function resetUserState() {
+    setMessages([])
+    setMessage('')
+    setActiveConversationId(null)
+    setReflectionMessages([])
+    setReflectionMessage('')
+    setContinueMessages([])
+    setContinueMessage('')
+    setSelectedSession(null)
+    setConversationSessions([])
+    setRecentLogs([])
+    setHealthServices([])
+    setLoadedScreen({ screen: null, error: '' })
+    setScreenNotice('')
+    setHistoryError('')
+    setUserRole(null)
+    setCurrentUser(null)
+    setAdminLogin(false)
+    setBreathingActive(false)
+    setCopingUsage({ journaling: 0, grounding: 0, breathing: 0 })
+  }
+
+  // SIGN-IN RESTORE AND EXPIRY
+  // A saved sign-in is checked with GET /api/auth/me. When any request answers
+  // 401 (expired or signed out elsewhere), the user returns to the login screen.
   useEffect(() => {
-    const data = getAnalyticsData()
+    onUnauthorized((detail) => {
+      resetUserState()
+      setAuthMode('signin')
+      setLoginError(detail || 'Please sign in again.')
+      setCurrentScreen('login')
+    })
 
-    data.visits.push(new Date().toISOString())
+    let cancelled = false
+    restoreSession().then((user) => {
+      if (cancelled) return
+      if (user) {
+        setCurrentUser(user)
+        setUserRole(user.role)
+        setCurrentScreen('home')
+      } else {
+        setCurrentScreen('login')
+      }
+    })
 
-    saveAnalyticsData(data)
+    return () => {
+      cancelled = true
+      onUnauthorized(null)
+    }
   }, [])
 
+  // SCREEN DATA
+  // History and the Admin Dashboard load fresh data each time they open.
+  useEffect(() => {
+    const loaders = {
+      history: async () => setConversationSessions(await listSessions()),
+      admin: async () => {
+        const [logs, health] = await Promise.all([getRecentLogs(10), getHealth()])
+        setRecentLogs(logs)
+        setHealthServices(health.services)
+      }
+    }
 
-  function recordNewConversation() {
-    const data = getAnalyticsData()
+    const load = loaders[currentScreen]
+    if (!load) return
 
-    data.conversations.push(new Date().toISOString())
+    let cancelled = false
+    load()
+      .then(() => {
+        if (!cancelled) setLoadedScreen({ screen: currentScreen, error: '' })
+      })
+      .catch((error) => {
+        if (cancelled) return
+        // Don't leave data from an earlier load on screen under the error.
+        if (currentScreen === 'history') {
+          setConversationSessions([])
+        } else {
+          setRecentLogs([])
+          setHealthServices([])
+        }
+        setLoadedScreen({ screen: currentScreen, error: error.message })
+      })
 
-    saveAnalyticsData(data)
-  }
+    return () => {
+      cancelled = true
+    }
+  }, [currentScreen])
 
 
   useEffect(() => {
@@ -285,18 +384,9 @@ function App() {
     }, 1000)
     return () => clearInterval(timer)
   }, [breathingActive])
-  // BACKEND INTEGRATION:
-  // Prototype/sample sessions only.
-  // Replace this array with GET /sessions for the authenticated user.
   const [journalText, setJournalText] = useState('')
   const [journalSaved, setJournalSaved] = useState(false)
   const [groundingStarted, setGroundingStarted] = useState(false)
-
-  const [copingUsage, setCopingUsage] = useState({
-    journaling: 0,
-    grounding: 0,
-    breathing: 0
-  })
 
   function recordCopingUsage(tool) {
     setCopingUsage((currentUsage) => ({
@@ -304,75 +394,148 @@ function App() {
       [tool]: currentUsage[tool] + 1
     }))
   }
-  const [conversationSessions, setConversationSessions] = useState([
-    {
-      id: 1,
-      type: 'conversation',
-      date: 'September 28, 2026',
-      title: 'Work and daily stress',
-      prompt: 'What has been on your mind today?',
-      messageCount: 2,
-      messages: [
-        {
-          role: 'user',
-          text: 'I have been feeling stressed about work.'
-        },
-        {
-          role: 'assistant',
-          text: 'Would you like to explore what has been making work stressful?'
-        }
-      ]
-    },
-    {
-      id: 2,
-      type: 'conversation',
-      date: 'September 26, 2026',
-      title: 'Thinking through a difficult situation',
-      prompt: 'What would you like to talk through today?',
-      messageCount: 2,
-      messages: [
-        {
-          role: 'user',
-          text: 'I have a difficult decision to make.'
-        },
-        {
-          role: 'assistant',
-          text: 'What feels most difficult about this decision?'
-        }
-      ]
-    },
-    {
-      id: 3,
-      type: 'reflection',
-      date: 'September 24, 2026',
-      title: 'Reflection on the week',
-      prompt: 'What has felt important to you this week?',
-      messageCount: 2,
-      messages: [
-        {
-          role: 'user',
-          text: 'I felt overwhelmed this week.'
-        },
-        {
-          role: 'assistant',
-          text: 'What do you think contributed most to that feeling?'
-        }
-      ]
-    }
-  ])
 
-  function updateSessionMessages(sessionId, updatedMessages) {
-    setConversationSessions((currentSessions) =>
-      currentSessions.map((session) =>
-        session.id === sessionId
-          ? {
-            ...session,
-            messages: updatedMessages,
-            messageCount: updatedMessages.length
-          }
-          : session
-      )
-    )
+  // AUTHENTICATION
+  async function handleAuthSubmit(event) {
+    event.preventDefault()
+    if (authBusy) return
+
+    const form = event.currentTarget.elements
+    const username = form.username.value
+    const password = form.password.value
+
+    setAuthBusy(true)
+    setLoginError('')
+    try {
+      const user = authMode === 'register'
+        ? await register(username, password)
+        : await signIn(username, password, adminLogin)
+
+      setCurrentUser(user)
+      setUserRole(user.role)
+      setCurrentScreen('home')
+    } catch (error) {
+      setLoginError(error.message)
+    } finally {
+      setAuthBusy(false)
+    }
+  }
+
+  async function handleSignOut() {
+    await signOut()
+    resetUserState()
+    setLoginError('')
+    setAuthMode('signin')
+    setCurrentScreen('login')
+  }
+
+  /*
+    SEND A MESSAGE THROUGH THE BACKEND
+    Shared by Conversation, Reflection Chat and Continue Session.
+    The backend saves the message and the reply together. Any failure (no reply
+    available yet, rate limit, length limit, network) appears as a notice in the
+    conversation, nothing is saved, and the user's text is put back in the input.
+  */
+  async function deliverMessage({ sessionId, userMessage, currentMessages, setList, setChecking, setInput }) {
+    const withUserMessage = [...currentMessages, { role: 'user', text: userMessage }]
+    setList(withUserMessage)
+    setInput('')
+    setChecking(true)
+
+    try {
+      const response = await sendMessageToBackend(sessionId, userMessage)
+      setList([...withUserMessage, { role: 'assistant', text: response.message }])
+      return true
+    } catch (error) {
+      console.error('Message request failed:', error)
+      setList([...currentMessages, { role: 'notice', text: error.message }])
+      setInput(userMessage)
+      return false
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  // CONVERSATION: start a fresh conversation (a session is created on the first message)
+  function startConversation() {
+    setMessages([])
+    setMessage('')
+    setActiveConversationId(null)
+    setCurrentScreen('conversation')
+  }
+
+  // REFLECTION: create a reflection session with the chosen prompt
+  async function startReflection() {
+    if (startingReflection) return
+
+    setStartingReflection(true)
+    setScreenNotice('')
+    try {
+      const session = await createSession({
+        type: 'reflection',
+        prompt: reflectionPrompt,
+        title: `Reflection: ${reflectionPrompt}`
+      })
+      setSelectedSession(session)
+      setConversationStarter(session.prompt)
+      setReflectionMessages([])
+      setReflectionMessage('')
+      setPreviousScreen('reflection')
+      setCurrentScreen('reflection-chat')
+    } catch (error) {
+      setScreenNotice(error.message)
+    } finally {
+      setStartingReflection(false)
+    }
+  }
+
+  // HISTORY: load a saved session's messages, then continue it
+  async function openSession(session) {
+    if (openingSessionId || deletingSessionId) return
+
+    setOpeningSessionId(session.id)
+    setHistoryError('')
+    try {
+      const detail = await getSession(session.id)
+      setSelectedSession(detail)
+      setConversationStarter(detail.prompt || CONVERSATION_STARTER)
+      setPreviousScreen('history')
+
+      if (detail.type === 'reflection') {
+        setReflectionMessages(detail.messages)
+        setReflectionMessage('')
+        setCurrentScreen('reflection-chat')
+      } else {
+        setContinueMessages(detail.messages)
+        setContinueMessage('')
+        setCurrentScreen('continue-session')
+      }
+    } catch (error) {
+      setHistoryError(error.message)
+    } finally {
+      setOpeningSessionId(null)
+    }
+  }
+
+  // HISTORY: delete a session and its messages (DELETE /api/sessions/{id})
+  async function removeSession(session) {
+    if (openingSessionId || deletingSessionId) return
+    if (!window.confirm(`Delete "${session.title}"? This removes the conversation permanently.`)) return
+
+    setDeletingSessionId(session.id)
+    setHistoryError('')
+    try {
+      await deleteSession(session.id)
+      setConversationSessions((current) => current.filter((item) => item.id !== session.id))
+      if (activeConversationId === session.id) {
+        setActiveConversationId(null)
+        setMessages([])
+      }
+    } catch (error) {
+      setHistoryError(error.message)
+    } finally {
+      setDeletingSessionId(null)
+    }
   }
 
   // SUPPORT BAR (shown on every screen except the support page itself)
@@ -396,8 +559,23 @@ function App() {
 
 
 
+  // LOADING SCREEN (while a saved sign-in is checked)
+  if (currentScreen === 'loading') {
+    return (
+      <div className='app'>
+        {supportBar}
+        <main className='login-page'>
+          <section className='login-card'>
+            <p className='status-text' role='status'>Loading...</p>
+          </section>
+        </main>
+      </div>
+    )
+  }
+
   // LOGIN SCREEN
   if (currentScreen === 'login') {
+    const registering = authMode === 'register'
     return (
       <div className='app'>
         {supportBar}
@@ -416,69 +594,79 @@ function App() {
               </p>
             </div>
 
-            <form
-              className='login-form'
-              onSubmit={(event) => {
-                event.preventDefault()
-                // BACKEND INTEGRATION:
-                // Replace prototype navigation with real authentication.
-                // Send credentials to FastAPI, including whether admin signin was requested.
-                //  The server returns the user's role. If administrator
-                // sign-in was requested and the role is not 'admin', the server must
-                // answer 403 and the person stays on this screen.
-                // navigate to Home only after successful authentication.
-
-                const username = event.currentTarget.elements.username.value
-                const isAdminAccount = username.trim().toLowerCase() === 'admin'// PROTOTYPE ONLY: the username "admin" stands in for an administrator account.
-
-
-                // PROTOTYPE: If Administrator is checked, the username must be "admin".
-                if (adminLogin && !isAdminAccount) {
-                  setLoginError('Administrator sign-in was not successful')
-                  return
-                }
-                setLoginError('')
-                setUserRole(adminLogin ? 'admin' : 'user')
-                setCurrentScreen('home')
-              }} >
+            {/* AUTHENTICATION
+                The server checks the credentials and returns the account's role.
+                With "Sign in as Administrator" checked, a non-admin account is
+                refused (403) and the person stays on this screen. */}
+            <form className='login-form' onSubmit={handleAuthSubmit}>
 
               <label htmlFor='username'>Username</label>
               <input
                 id='username'
                 type='text'
-                //autoComplete='username'
-                placeholder='Enter your username' required />
+                autoComplete='username'
+                minLength={registering ? 3 : undefined}
+                maxLength={32}
+                placeholder={registering ? 'Choose a username' : 'Enter your username'} required />
+
+              {registering && (
+                <p className='form-hint'>
+                  3-32 letters, numbers, dots, dashes or underscores. Please don't use your real name or email.
+                </p>
+              )}
 
               <label htmlFor='password'>Password</label>
               <input
                 id='password'
                 type='password'
-                //autoComplete='current-password'
-                placeholder='Enter your password' required />
+                autoComplete={registering ? 'new-password' : 'current-password'}
+                minLength={registering ? 8 : undefined}
+                maxLength={128}
+                placeholder={registering ? 'At least 8 characters' : 'Enter your password'} required />
 
-              <label className='login-admin-option' htmlFor='admin-login'>
-                <input
-                  id='admin-login'
-                  type='checkbox'
-                  checked={adminLogin}
-                  onChange={(event) => {
-                    setAdminLogin(event.target.checked)
-                    setLoginError('')
-                  }}
-                />
-                Sign in as Administrator
-              </label>
+              {!registering && (
+                <label className='login-admin-option' htmlFor='admin-login'>
+                  <input
+                    id='admin-login'
+                    type='checkbox'
+                    checked={adminLogin}
+                    onChange={(event) => {
+                      setAdminLogin(event.target.checked)
+                      setLoginError('')
+                    }}
+                  />
+                  Sign in as Administrator
+                </label>
+              )}
 
               {loginError && (
                 <p className='login-error' role='alert'>{loginError}</p>
               )}
 
-              <button type='submit'>Sign In</button>
+              <button type='submit' disabled={authBusy}>
+                {authBusy
+                  ? 'Please wait...'
+                  : registering ? 'Create Account' : 'Sign In'}
+              </button>
             </form>
 
+            <p className='login-switch'>
+              {registering ? 'Already have an account?' : 'New here?'}{' '}
+              <button
+                className='link-button'
+                type='button'
+                onClick={() => {
+                  setAuthMode(registering ? 'signin' : 'register')
+                  setAdminLogin(false)
+                  setLoginError('')
+                }}
+              >
+                {registering ? 'Sign in' : 'Create an account'}
+              </button>
+            </p>
 
             <p className='demo-note'>
-              Prototype Placeholder login '-' authentication to be connected to backend(?)
+              No email or real name is needed. Your account is only used to keep your sessions private.
             </p>
 
           </section>
@@ -507,21 +695,14 @@ function App() {
                   </h1>
 
                   <p>
-                    Welcome! Take a moment for yourself today.
+                    Welcome{currentUser ? `, ${currentUser.username}` : ''}! Take a moment for yourself today.
                   </p>
                 </div>
 
                 <button
                   className='logout-button'
                   type='button'
-                  onClick={() => {
-                    setMessages([])
-                    setMessage('')
-                    setUserRole(null)
-                    setAdminLogin(false)
-                    setLoginError('')
-                    setCurrentScreen('login')
-                  }}
+                  onClick={handleSignOut}
                 >
                   Sign Out
                 </button>
@@ -545,7 +726,7 @@ function App() {
 
                   <button
                     className='home-option'
-                    onClick={() => setCurrentScreen('conversation')}
+                    onClick={startConversation}
                   >
                     <span className='option-title'>
                       Start a Conversation
@@ -607,12 +788,7 @@ function App() {
                       My Insights
                     </span>
 
-                    {/* USER ANALYTICS */}
-                    {/* BACKEND INTEGRATION:
-                      Replace mock analytics data with the authenticated user's
-                      analytics returned from the backend, for example:
-                      GET /analytics/me
-                  */}
+                    {/* USER ANALYTICS: sample data until GET /api/analytics/me exists */}
 
                     <span className='option-description'>
                       View your session activity and usage patterns.
@@ -643,12 +819,7 @@ function App() {
                 <button
                   className='logout-button'
                   type='button'
-                  onClick={() => {
-                    setUserRole(null)
-                    setAdminLogin(false)
-                    setLoginError('')
-                    setCurrentScreen('login')
-                  }}
+                  onClick={handleSignOut}
                 >
                   Sign Out
                 </button>
@@ -735,24 +906,11 @@ function App() {
 
               <div className='message assistant-message'>
                 <span className='message-label'>AI Companion</span>
-                <p>What would you like to talk about today?</p>
+                <p>{CONVERSATION_STARTER}</p>
               </div>
 
               {messages.map((item, index) => (
-                <div
-                  key={index}
-                  className={
-                    item.role === 'user'
-                      ? 'message user-message'
-                      : 'message assistant-message'
-                  }
-                >
-                  <span className='message-label'>
-                    {item.role === 'user' ? 'You' : 'AI Companion'}
-                  </span>
-
-                  <p>{item.text}</p>
-                </div>
+                <MessageBubble key={item.id ? `saved-${item.id}` : `new-${index}`} item={item} />
               ))}
 
               {safetyChecking && (
@@ -770,114 +928,43 @@ function App() {
                 event.preventDefault()
 
                 // Do not submit empty messages
-                // Do not submit while safety check is running
+                // Do not submit while a request is running
                 if (!message.trim() || safetyChecking) {
                   return
                 }
 
                 const userMessage = message.trim()
 
+                // The first message creates the conversation session (POST /api/sessions).
                 let sessionId = activeConversationId
-
-                if (messages.length === 0) {
-                  recordNewConversation()
-
-                  sessionId = Date.now()
-                  setActiveConversationId(sessionId)
-
-                  const newSession = {
-                    id: sessionId,
-                    type: 'conversation',
-                    date: new Date().toLocaleDateString('en-US', {
-                      month: 'long',
-                      day: 'numeric',
-                      year: 'numeric'
-                    }),
-                    title: userMessage.length > 40
-                      ? `${userMessage.substring(0, 40)}...`
-                      : userMessage,
-                    prompt: 'What would you like to talk about today?',
-                    messageCount: 0,
-                    messages: []
-                  }
-
-                  setConversationSessions((currentSessions) => [
-                    newSession,
-                    ...currentSessions
-                  ])
-                }
-
-                // BACKEND INTEGRATION:
-                // Send this message with the authenticated user/session
-                // information to the backend after the safety workflow
-                // is implemented server-side
-                // Start safety check
-                setSafetyChecking(true)
-                setSafetyStatus('checking')
-
-                // Add user's message
-                const updatedMessages = [
-                  ...messages,
-                  {
-                    role: 'user',
-                    text: userMessage
-                  }
-                ]
-
-                setMessages(updatedMessages)
-
-                if (sessionId !== null) {
-                  updateSessionMessages(sessionId, updatedMessages)
-                }
-
-                // Clear input
-                setMessage('')
-
-                //============================================================
-                // SAFETY BACKEND INTEGRATION:
-                // Replace this setTimeout prototype with a request to FastAPI.
-                // Intended flow:
-                // React → FastAPI → Safety/Moderation → clear/concern/error
-                // ============================================================
-                try {
-                  const response = await sendMessageToBackend(userMessage)
-
-                  setSafetyChecking(false)
-                  setSafetyStatus(response.status)
-
-                  if (response.status === 'concern') {
-                    setCurrentScreen('support-resources')
+                const createdNow = !sessionId
+                if (createdNow) {
+                  setSafetyChecking(true)
+                  try {
+                    const session = await createSession({ type: 'conversation', prompt: CONVERSATION_STARTER })
+                    sessionId = session.id
+                    setActiveConversationId(sessionId)
+                  } catch (error) {
+                    setSafetyChecking(false)
+                    setMessages([...messages, { role: 'notice', text: error.message }])
                     return
                   }
+                }
 
-                  if (response.status === 'error') {
-                    setCurrentScreen('safety-error')
-                    return
-                  }
+                const delivered = await deliverMessage({
+                  sessionId,
+                  userMessage,
+                  currentMessages: messages,
+                  setList: setMessages,
+                  setChecking: setSafetyChecking,
+                  setInput: setMessage
+                })
 
-                  const updatedMessages = [
-                    ...messages,
-                    {
-                      role: 'user',
-                      text: userMessage
-                    },
-                    {
-                      role: 'assistant',
-                      text: response.message
-                    }
-                  ]
-
-                  setMessages(updatedMessages)
-
-                  if (sessionId !== null) {
-                    updateSessionMessages(sessionId, updatedMessages)
-                  }
-                } catch (error) {
-                  console.error('Message request failed:', error)
-
-                  setSafetyChecking(false)
-                  setSafetyStatus('error')
-                  setCurrentScreen('safety-error')
+                // Nothing was saved, so don't leave an empty session behind; the next
+                // attempt creates a new one. (The backend also hides and cleans up empty sessions.)
+                if (createdNow && !delivered) {
+                  setActiveConversationId(null)
+                  deleteSession(sessionId).catch(() => {})
                 }
               }}
             >
@@ -893,6 +980,7 @@ function App() {
                 id='message'
                 type='text'
                 placeholder="What's on your mind today?"
+                maxLength={MAX_MESSAGE_LENGTH}
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
                 disabled={safetyChecking}
@@ -947,40 +1035,11 @@ function App() {
             <div className='reflection-actions'>
               <button
                 className='primary-button'
-                onClick={() => {
-                  // Create a session using the current prompt.
-                  const newSession = {
-                    id: Date.now(),
-                    type: 'reflection',
-                    date: new Date().toLocaleDateString('en-US', {
-                      month: 'long',
-                      day: 'numeric',
-                      year: 'numeric'
-                    }),
-                    title: `Reflection: ${reflectionPrompt}`,
-                    prompt: reflectionPrompt,
-                    messageCount: 0,
-                    messages: []
-                  }
-
-                  // Add the session to Conversation History.
-                  setConversationSessions((currentSessions) => [
-                    newSession,
-                    ...currentSessions
-                  ])
-
-                  // Select the new session.
-                  setSelectedSession(newSession)
-
-                  // Start with an empty reflection conversation.
-                  setReflectionMessages([])
-                  setReflectionMessage('')
-
-                  // Open Reflection Chat.
-                  setCurrentScreen('reflection-chat')
-                }}
+                type='button'
+                disabled={startingReflection}
+                onClick={startReflection}
               >
-                Use This Prompt
+                {startingReflection ? 'Starting...' : 'Use This Prompt'}
               </button>
 
               <button
@@ -1005,6 +1064,10 @@ function App() {
                 Give Me Another Prompt
               </button>
             </div>
+
+            {screenNotice && (
+              <p className='login-error' role='alert'>{screenNotice}</p>
+            )}
           </section>
         </main>
       </div>
@@ -1023,9 +1086,9 @@ function App() {
             <button
               className='back-button'
               type='button'
-              onClick={() => setCurrentScreen('reflection')}
+              onClick={() => setCurrentScreen(previousScreen === 'history' ? 'history' : 'reflection')}
             >
-              Back to Reflection
+              {previousScreen === 'history' ? 'Back to History' : 'Back to Reflection'}
             </button>
 
             <h1>Reflection Chat</h1>
@@ -1055,19 +1118,7 @@ function App() {
 
               {/* Display reflection chat messages */}
               {reflectionMessages.map((item, index) => (
-                <div
-                  key={index}
-                  className={
-                    item.role === 'user'
-                      ? 'message user-message'
-                      : 'message assistant-message'
-                  }
-                >
-                  <span className='message-label'>
-                    {item.role === 'user' ? 'You' : 'AI Companion'}
-                  </span>
-                  <p>{item.text}</p>
-                </div>
+                <MessageBubble key={item.id ? `saved-${item.id}` : `new-${index}`} item={item} />
               ))}
 
               {reflectionSafetyChecking && (
@@ -1085,70 +1136,20 @@ function App() {
 
                 if (
                   !reflectionMessage.trim() ||
-                  reflectionSafetyChecking
+                  reflectionSafetyChecking ||
+                  !selectedSession
                 ) {
                   return
                 }
 
-                const userMessage = reflectionMessage.trim()
-
-                const updatedMessages = [
-                  ...reflectionMessages,
-                  { role: 'user', text: userMessage }
-                ]
-
-                setReflectionMessages(updatedMessages)
-                setReflectionMessage('')
-                setReflectionSafetyChecking(true)
-
-                // Save the user's message to the selected session.
-                if (selectedSession) {
-                  updateSessionMessages(
-                    selectedSession.id,
-                    updatedMessages
-                  )
-                }
-
-                try {
-                  const response =
-                    await sendMessageToBackend(userMessage)
-
-                  if (response.status === 'concern') {
-                    setCurrentScreen('support-resources')
-                    return
-                  }
-
-                  if (response.status === 'error') {
-                    setCurrentScreen('safety-error')
-                    return
-                  }
-
-                  const messagesWithReply = [
-                    ...updatedMessages,
-                    {
-                      role: 'assistant',
-                      text: response.message
-                    }
-                  ]
-
-                  setReflectionMessages(messagesWithReply)
-
-                  // Save both messages to the selected session.
-                  if (selectedSession) {
-                    updateSessionMessages(
-                      selectedSession.id,
-                      messagesWithReply
-                    )
-                  }
-                } catch (error) {
-                  console.error(
-                    'Reflection message failed:',
-                    error
-                  )
-                  setCurrentScreen('safety-error')
-                } finally {
-                  setReflectionSafetyChecking(false)
-                }
+                await deliverMessage({
+                  sessionId: selectedSession.id,
+                  userMessage: reflectionMessage.trim(),
+                  currentMessages: reflectionMessages,
+                  setList: setReflectionMessages,
+                  setChecking: setReflectionSafetyChecking,
+                  setInput: setReflectionMessage
+                })
               }}
             >
               <label
@@ -1162,6 +1163,7 @@ function App() {
                 id='reflection-message'
                 type='text'
                 placeholder='Write your reflection...'
+                maxLength={MAX_MESSAGE_LENGTH}
                 value={reflectionMessage}
                 onChange={(event) =>
                   setReflectionMessage(event.target.value)
@@ -1450,9 +1452,7 @@ function App() {
   }
 
   // CONVERSATION HISTORY SCREEN
-  // BACKEND INTEGRATION:
-  // Replace the sample conversationSessions data with sessions
-  // returned for the authenticated user by GET /sessions.
+  // GET /api/sessions returns only the signed-in user's sessions.
   if (currentScreen === 'history') {
     return (
       <div className='app'>
@@ -1468,6 +1468,21 @@ function App() {
 
           <section className='history-card'>
             <h2>Your Previous Conversations</h2>
+
+            {screenLoading && (
+              <p className='status-text' role='status'>Loading your conversations...</p>
+            )}
+
+            {(screenLoadError || historyError) && (
+              <p className='login-error' role='alert'>{historyError || screenLoadError}</p>
+            )}
+
+            {!screenLoading && !screenLoadError && conversationSessions.length === 0 && (
+              <p className='status-text'>
+                No conversations yet. Your conversations and reflections will appear here.
+              </p>
+            )}
+
             <div className='session-list'>
               {conversationSessions.map((session) => (
                 <div key={session.id}
@@ -1476,33 +1491,32 @@ function App() {
                     <span className='session-date'>{session.date}</span>
 
                     <h3>{session.title}</h3>
-                    <span className='session-count'>{session.messageCount} messages</span>
+                    <span className='session-count'>
+                      {session.messageCount} {session.messageCount === 1 ? 'message' : 'messages'}
+                    </span>
 
                   </div>
 
-                  <button
-                    className='session-button'
-                    onClick={() => {
-                      setSelectedSession(session)
+                  <div className='session-actions'>
+                    <button
+                      className='session-button'
+                      type='button'
+                      disabled={openingSessionId !== null || deletingSessionId !== null}
+                      onClick={() => openSession(session)}
+                    >
+                      {openingSessionId === session.id ? 'Opening...' : 'Continue'}
+                    </button>
 
-                      if (session.type === 'reflection') {
-                        setConversationStarter(session.prompt)
-                        setReflectionMessages(session.messages || [])
-                        setReflectionMessage('')
-                        setCurrentScreen('reflection-chat')
-                      } else {
-                        setConversationStarter(session.prompt)
-                        setContinueMessages(session.messages || []) // BACKEND INTEGRATION:
-                        // Load the selected session/messages with
-                        // GET /sessions/{session_id}.
-                        setContinueMessage('')
-                        setCurrentScreen('continue-session')
-                      }
-                    }}
-                  >
-                    Continue
-                  </button>
-
+                    <button
+                      className='session-delete-button'
+                      type='button'
+                      aria-label={`Delete ${session.title}`}
+                      disabled={openingSessionId !== null || deletingSessionId !== null}
+                      onClick={() => removeSession(session)}
+                    >
+                      {deletingSessionId === session.id ? 'Deleting...' : 'Delete'}
+                    </button>
+                  </div>
 
                 </div>
               ))}
@@ -1820,6 +1834,15 @@ function App() {
   if (currentScreen === 'admin' && userRole === 'admin') {
 
     const adminAnalytics = SAMPLE_ADMIN_ANALYTICS
+
+    // Architecture Health: this page loaded, so the frontend is healthy; backend,
+    // database and logging come from GET /api/health. Safety and AI are not connected yet.
+    const architectureHealth = [
+      { name: 'Frontend', status: 'Healthy' },
+      ...healthServices,
+      { name: 'Safety / Moderation', status: 'Not connected yet' },
+      { name: 'AI Service', status: 'Not connected yet' }
+    ]
 
     const maxDayCount = Math.max(
       1,
@@ -2286,7 +2309,11 @@ function App() {
 
             <div className='admin-health-list'>
 
-              {adminAnalytics.architectureHealth.map((layer) => (
+              {screenLoading && (
+                <p className='status-text' role='status'>Checking services...</p>
+              )}
+
+              {!screenLoading && architectureHealth.map((layer) => (
 
                 <div
                   className='admin-health-item'
@@ -2324,7 +2351,19 @@ function App() {
 
             <div className='admin-log-list'>
 
-              {adminAnalytics.recentLogs.map((log, index) => (
+              {screenLoading && (
+                <p className='status-text' role='status'>Loading recent events...</p>
+              )}
+
+              {screenLoadError && (
+                <p className='login-error' role='alert'>{screenLoadError}</p>
+              )}
+
+              {!screenLoading && !screenLoadError && recentLogs.length === 0 && (
+                <p className='status-text'>No events recorded yet.</p>
+              )}
+
+              {recentLogs.map((log, index) => (
 
                 <div
                   className={`admin-log-item ${log.status === 'Warning'
@@ -2333,13 +2372,13 @@ function App() {
                       ? 'is-error'
                       : ''
                     }`}
-                  key={index}
+                  key={`${log.time}-${index}`}
                 >
 
                   <div>
 
                     <span>
-                      {log.time} · {log.type}
+                      {formatLogTime(log.time)} · {log.type}
                     </span>
 
                     <strong>
@@ -2423,13 +2462,7 @@ function App() {
 
             <div className='message-area'>
 
-              {/* BACKEND INTEGRATION:
-                Replace this placeholder with the actual messages
-                returned for selectedSession from the backend.
-                
-                Example:
-                GET /sessions/{session_id}
-            */}
+              {/* Messages loaded with GET /api/sessions/{session_id} */}
 
               <div className='message assistant-message'>
                 <span className='message-label'>Session Prompt</span>
@@ -2441,26 +2474,9 @@ function App() {
               </div>
 
 
-              {/* DISPLAY NEW MESSAGES */}
+              {/* DISPLAY MESSAGES */}
               {continueMessages.map((item, index) => (
-                <div
-                  key={index}
-                  className={
-                    item.role === 'user'
-                      ? 'message user-message'
-                      : 'message assistant-message'
-                  }
-                >
-
-                  <span className='message-label'>
-                    {item.role === 'user' ? 'You' : 'AI Companion'}
-                  </span>
-
-                  <p>
-                    {item.text}
-                  </p>
-
-                </div>
+                <MessageBubble key={item.id ? `saved-${item.id}` : `new-${index}`} item={item} />
               ))}
 
 
@@ -2481,11 +2497,7 @@ function App() {
 
             {/* MESSAGE FORM */}
 
-            {/* BACKEND INTEGRATION:
-              This form will eventually use the same
-              safety → AI → save-message workflow as the
-              main Conversation screen.
-          */}
+            {/* Same send-and-save workflow as the Conversation screen */}
 
             <form
               className='message-form'
@@ -2496,70 +2508,20 @@ function App() {
                 // Do not submit while safety check is running
                 if (
                   !continueMessage.trim() ||
-                  continueSafetyChecking
+                  continueSafetyChecking ||
+                  !selectedSession
                 ) {
                   return
                 }
 
-                const userMessage = continueMessage.trim()
-
-                const updatedMessages = [
-                  ...continueMessages,
-                  { role: 'user', text: userMessage }
-                ]
-
-                setContinueMessages(updatedMessages)
-                setContinueMessage('')
-                setContinueSafetyChecking(true)
-
-                // Save the user's message to the selected session.
-                if (selectedSession) {
-                  updateSessionMessages(
-                    selectedSession.id,
-                    updatedMessages
-                  )
-                }
-
-                try {
-                  const response =
-                    await sendMessageToBackend(userMessage)
-
-                  if (response.status === 'concern') {
-                    setCurrentScreen('support-resources')
-                    return
-                  }
-
-                  if (response.status === 'error') {
-                    setCurrentScreen('safety-error')
-                    return
-                  }
-
-                  const messagesWithReply = [
-                    ...updatedMessages,
-                    {
-                      role: 'assistant',
-                      text: response.message
-                    }
-                  ]
-
-                  setContinueMessages(messagesWithReply)
-
-                  // Save both messages to the selected session.
-                  if (selectedSession) {
-                    updateSessionMessages(
-                      selectedSession.id,
-                      messagesWithReply
-                    )
-                  }
-                } catch (error) {
-                  console.error(
-                    'Continue session message failed:',
-                    error
-                  )
-                  setCurrentScreen('safety-error')
-                } finally {
-                  setContinueSafetyChecking(false)
-                }
+                await deliverMessage({
+                  sessionId: selectedSession.id,
+                  userMessage: continueMessage.trim(),
+                  currentMessages: continueMessages,
+                  setList: setContinueMessages,
+                  setChecking: setContinueSafetyChecking,
+                  setInput: setContinueMessage
+                })
               }}
             >
               <label
@@ -2573,6 +2535,7 @@ function App() {
                 id='continue-message'
                 type='text'
                 placeholder='Write your message...'
+                maxLength={MAX_MESSAGE_LENGTH}
                 value={continueMessage}
                 onChange={(event) =>
                   setContinueMessage(event.target.value)
@@ -2659,7 +2622,7 @@ function App() {
                 onClick={() => {
                   setMessages([])
                   setMessage('')
-                  setSafetyStatus('clear')
+                  setActiveConversationId(null)
                   setSafetyChecking(false)
                   setCurrentScreen('home')
                 }}>End Session
@@ -2733,6 +2696,8 @@ function App() {
                 type='button'
                 onClick={() => {
                   setMessages([])
+                  setMessage('')
+                  setActiveConversationId(null)
                   setCurrentScreen('home')
                 }}
               >
