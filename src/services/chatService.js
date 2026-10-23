@@ -39,6 +39,8 @@ function toUiSession(session) {
     id: session.id,
     type: session.type,
     date: formatSessionDate(session.last_active),
+    createdAt: session.created_at,
+    lastActive: session.last_active,
     title: session.title || (session.type === 'reflection' ? 'Reflection' : 'Conversation'),
     prompt: session.prompt,
     messageCount: session.message_count

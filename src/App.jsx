@@ -122,31 +122,10 @@ function MessageBubble({ item }) {
   )
 }
 
-//MY ANALYTICS: Prototype Sample Data
-//BACKEND INTEGRATION: no endpoint yet (GET /api/analytics/me is planned, owner: Korey)
-const SAMPLE_ANALYTICS = {
-  totalSessions: 12,
-  sessionsThisWeek: 4,
-  sessionsThisMonth: 9,
-  lastVisit: 'Yesterday',
-  typicalSessionMinutes: 9,
-  //Sessions by day of the week, all time. These add up to totalSessions.
-  weekdays: [
-    { day: 'Mon', count: 2 },
-    { day: 'Tue', count: 3 },
-    { day: 'Wed', count: 1 },
-    { day: 'Thu', count: 3 },
-    { day: 'Fri', count: 1 },
-    { day: 'Sat', count: 1 },
-    { day: 'Sun', count: 1 },
-  ],
+// MY ANALYTICS SCREEN
+// Session metrics are calculated from the authenticated user's sessions.
+// Coping-tool counts are tracked locally in the current browser tab.
 
-  tools: [
-    { name: 'Mindful Breathing', completed: 5 },
-    { name: 'Journaling', completed: 3 },
-    { name: 'Grounding', completed: 2 }
-  ]
-}
 
 // ADMIN DASHBOARD DATA
 // Statistics, safety decisions, escalations and AI cost come from GET /api/admin/analytics,
@@ -254,7 +233,7 @@ function App() {
   const [openingSessionId, setOpeningSessionId] = useState(null)
   const [deletingSessionId, setDeletingSessionId] = useState(null)
   const [historyError, setHistoryError] = useState('')
-  const screenLoading = ['history', 'admin'].includes(currentScreen) && loadedScreen.screen !== currentScreen
+  const screenLoading = ['history', 'analytics', 'admin'].includes(currentScreen) && loadedScreen.screen !== currentScreen
   const screenLoadError = loadedScreen.screen === currentScreen ? loadedScreen.error : ''
 
   // COPING TOOL USAGE
@@ -333,6 +312,7 @@ function App() {
   // History and the Admin Dashboard load fresh data each time they open.
   useEffect(() => {
     const loaders = {
+      analytics: async () => setConversationSessions(await listSessions()),
       history: async () => setConversationSessions(await listSessions()),
       admin: async () => {
         const [logs, health, analytics] = await Promise.all([
@@ -357,9 +337,11 @@ function App() {
       .catch((error) => {
         if (cancelled) return
         // Don't leave data from an earlier load on screen under the error.
-        if (currentScreen === 'history') {
+        if (currentScreen === 'history' || currentScreen === 'analytics') {
           setConversationSessions([])
-        } else {
+        }
+
+        if (currentScreen === 'admin') {
           setRecentLogs([])
           setHealthServices([])
           setAdminAnalyticsData(null)
@@ -1023,7 +1005,7 @@ function App() {
                 // attempt creates a new one. (The backend also hides and cleans up empty sessions.)
                 if (createdNow && !delivered) {
                   setActiveConversationId(null)
-                  deleteSession(sessionId).catch(() => {})
+                  deleteSession(sessionId).catch(() => { })
                 }
               }}
             >
@@ -1588,28 +1570,77 @@ function App() {
   }
   // MY ANALYTICS SCREEN
   // BACKEND INTEGRATION:
-  // Replace SAMPLE_ANALYTICS with GET /analytics/me for the authenticated user.
+  // Session metrics are calculated from the authenticated user's session records.
   // The backend must enforce user-level data isolation.
   // The frontend is never the security boundary.
 
   if (currentScreen === 'analytics') {
+    const validSessions = conversationSessions.filter(
+      (session) => session.createdAt && !Number.isNaN(new Date(session.createdAt).getTime())
+    )
+
+    const now = new Date()
+    const startOfWeek = new Date(now)
+    startOfWeek.setHours(0, 0, 0, 0)
+    const daysSinceMonday = (now.getDay() + 6) % 7
+    startOfWeek.setDate(now.getDate() - daysSinceMonday)
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+
+    const weekdays = [
+      { day: 'Mon', count: 0 },
+      { day: 'Tue', count: 0 },
+      { day: 'Wed', count: 0 },
+      { day: 'Thu', count: 0 },
+      { day: 'Fri', count: 0 },
+      { day: 'Sat', count: 0 },
+      { day: 'Sun', count: 0 }
+    ]
+
+    validSessions.forEach((session) => {
+      const createdAt = new Date(session.createdAt)
+      const weekdayIndex = (createdAt.getDay() + 6) % 7
+      weekdays[weekdayIndex].count += 1
+    })
+
+    const mostRecentSession = [...validSessions].sort(
+      (a, b) =>
+        new Date(b.lastActive || b.createdAt).getTime() -
+        new Date(a.lastActive || a.createdAt).getTime()
+    )[0]
+
     const analytics = {
-  ...SAMPLE_ANALYTICS,
-  tools: [
-    {
-      name: 'Mindful Breathing',
-      completed: copingUsage.breathing
-    },
-    {
-      name: 'Journaling',
-      completed: copingUsage.journaling
-    },
-    {
-      name: 'Grounding',
-      completed: copingUsage.grounding
+      totalSessions: validSessions.length,
+      sessionsThisWeek: validSessions.filter(
+        (session) => new Date(session.createdAt) >= startOfWeek
+      ).length,
+      sessionsThisMonth: validSessions.filter(
+        (session) => new Date(session.createdAt) >= startOfMonth
+      ).length,
+      lastVisit: mostRecentSession
+        ? new Date(mostRecentSession.lastActive || mostRecentSession.createdAt)
+          .toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+          })
+        : 'No visits yet',
+      weekdays,
+      tools: [
+        {
+          name: 'Mindful Breathing',
+          completed: copingUsage.breathing
+        },
+        {
+          name: 'Journaling',
+          completed: copingUsage.journaling
+        },
+        {
+          name: 'Grounding',
+          completed: copingUsage.grounding
+        }
+      ]
     }
-  ]
-}
 
     const maxDayCount = Math.max(
       1,
@@ -1793,28 +1824,10 @@ function App() {
                 <h2>Your Visits</h2>
 
                 <div className='analytics-detail-grid'>
-
                   <div className='analytics-detail-item'>
-
                     <span>Last visit</span>
-
-                    <strong>
-                      {analytics.lastVisit}
-                    </strong>
-
+                    <strong>{analytics.lastVisit}</strong>
                   </div>
-
-
-                  <div className='analytics-detail-item'>
-
-                    <span>Typical session length</span>
-
-                    <strong>
-                      {analytics.typicalSessionMinutes} min
-                    </strong>
-
-                  </div>
-
                 </div>
 
               </section>
