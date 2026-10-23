@@ -308,6 +308,7 @@ function App() {
   }, [messages, reflectionMessages, continueMessages, safetyChecking, reflectionSafetyChecking,
     continueSafetyChecking])
 
+
   // SCREEN DATA
   // History and the Admin Dashboard load fresh data each time they open.
   useEffect(() => {
@@ -330,12 +331,18 @@ function App() {
     if (!load) return
 
     let cancelled = false
+
     load()
       .then(() => {
-        if (!cancelled) setLoadedScreen({ screen: currentScreen, error: '' })
+        if (!cancelled) {
+          setLoadedScreen({ screen: currentScreen, error: '' })
+        }
       })
       .catch((error) => {
         if (cancelled) return
+
+
+
         // Don't leave data from an earlier load on screen under the error.
         if (currentScreen === 'history' || currentScreen === 'analytics') {
           setConversationSessions([])
@@ -346,13 +353,22 @@ function App() {
           setHealthServices([])
           setAdminAnalyticsData(null)
         }
-        setLoadedScreen({ screen: currentScreen, error: error.message })
+
+        const errorMessage =
+          currentScreen === 'history'
+            ? 'We could not load your conversation history. Check your connection and try again.'
+            : currentScreen === 'analytics'
+              ? 'We could not load analytics. Check your connection and try again.'
+              : 'We could not load admin dashboard data. Check your connection and try again.'
+
+        setLoadedScreen({ screen: currentScreen, error: errorMessage })
       })
 
     return () => {
       cancelled = true
     }
   }, [currentScreen])
+
 
 
   useEffect(() => {
@@ -470,8 +486,15 @@ function App() {
       return true
     } catch (error) {
       console.error('Message request failed:', error)
-      setList([...currentMessages, { role: 'notice', text: error.message }])
+
+      // Safety backend integration:
+      // If the safety check cannot be completed, fail closed.
+      // Do not display the unchecked message as a normal conversation message.
+      setList(currentMessages)
       setInput(userMessage)
+      setReturnScreen(currentScreen)
+      setCurrentScreen('safety-error')
+
       return false
     } finally {
       setChecking(false)
@@ -505,7 +528,11 @@ function App() {
       setPreviousScreen('reflection')
       setCurrentScreen('reflection-chat')
     } catch (error) {
-      setScreenNotice(error.message)
+      console.error('Unable to create reflection session:', error)
+
+      setScreenNotice('')
+      setReturnScreen('reflection')
+      setCurrentScreen('safety-error')
     } finally {
       setStartingReflection(false)
     }
@@ -533,7 +560,10 @@ function App() {
         setCurrentScreen('continue-session')
       }
     } catch (error) {
-      setHistoryError(error.message)
+      console.error('Unable to open conversation session:', error)
+      setHistoryError(
+        'We could not load this conversation. Check your connection and try again.'
+      )
     } finally {
       setOpeningSessionId(null)
     }
@@ -554,7 +584,10 @@ function App() {
         setMessages([])
       }
     } catch (error) {
-      setHistoryError(error.message)
+      console.error('Unable to delete conversation session:', error)
+      setHistoryError(
+        'We could not delete this conversation. Check your connection and try again.'
+      )
     } finally {
       setDeletingSessionId(null)
     }
@@ -929,6 +962,16 @@ function App() {
               Back to Home
             </button>
 
+            {/*<button
+              type="button"
+              onClick={() => {
+                setReturnScreen(currentScreen)
+                setCurrentScreen('safety-error')
+              }}
+            >
+              Test Safety Error Screen
+            </button>*/}
+
             <h1>Conversation</h1>
           </header>
 
@@ -986,8 +1029,14 @@ function App() {
                     sessionId = session.id
                     setActiveConversationId(sessionId)
                   } catch (error) {
+                    console.error('Unable to create conversation session:', error)
+
                     setSafetyChecking(false)
-                    setMessages([...messages, { role: 'notice', text: error.message }])
+                    setMessages(messages)
+                    setMessage(userMessage)
+                    setReturnScreen('conversation')
+                    setCurrentScreen('safety-error')
+
                     return
                   }
                 }
@@ -1678,8 +1727,19 @@ function App() {
 
 
           {/* ANALYTICS CONTENT */}
+          {screenLoading && (
+            <p className='status-text' role='status'>
+              Loading your activity...
+            </p>
+          )}
 
-          {analytics.totalSessions === 0 ? (
+          {screenLoadError && (
+            <p className='login-error' role='alert'>
+              {screenLoadError}
+            </p>
+          )}
+
+          {screenLoading || screenLoadError ? null : analytics.totalSessions === 0 ? (
 
             <section className='analytics-card'>
 
@@ -1944,600 +2004,612 @@ function App() {
             </p>
 
             {screenLoading && (
-              <p className='status-text' role='status'>Loading dashboard data...</p>
+              <p className='status-text' role='status'>
+                Loading dashboard data...
+              </p>
+            )}
+
+            {screenLoadError && (
+              <p className='login-error' role='alert'>
+                {screenLoadError}
+              </p>
             )}
 
           </header>
 
+          {!screenLoading && !screenLoadError && (
+            <>
 
-          {/*  OVERVIEW */}
 
-          <section className='analytics-card'>
+              {/*  OVERVIEW */}
 
-            <h2>Overview: Last 7 Days</h2>
+              <section className='analytics-card'>
 
-            <p className='analytics-intro'>
-              Aggregate activity across all users.
-              Conversation content is not shown here.
-            </p>
+                <h2>Overview: Last 7 Days</h2>
 
+                <p className='analytics-intro'>
+                  Aggregate activity across all users.
+                  Conversation content is not shown here.
+                </p>
 
-            <div className='analytics-summary-grid'>
 
-              <article className='analytics-stat-card'>
+                <div className='analytics-summary-grid'>
 
-                <span className='analytics-stat-label'>
-                  Active Users
-                </span>
+                  <article className='analytics-stat-card'>
 
-                <strong className='analytics-stat-number'>
-                  {adminAnalytics.activeUsers}
-                </strong>
-
-                <span className='analytics-stat-description'>
-                  Users with activity
-                </span>
-
-              </article>
-
-
-              <article className='analytics-stat-card'>
-
-                <span className='analytics-stat-label'>
-                  Total Sessions
-                </span>
-
-                <strong className='analytics-stat-number'>
-                  {adminAnalytics.totalSessions}
-                </strong>
-
-                <span className='analytics-stat-description'>
-                  All users combined
-                </span>
-
-              </article>
-
-
-              <article className='analytics-stat-card'>
-
-                <span className='analytics-stat-label'>
-                  Sessions per Active User
-                </span>
-
-                <strong className='analytics-stat-number'>
-                  {adminAnalytics.sessionsPerUser}
-                </strong>
-
-                <span className='analytics-stat-description'>
-                  Average over 7 days
-                </span>
-
-              </article>
-
-
-              <article className='analytics-stat-card'>
-
-                <span className='analytics-stat-label'>
-                  Messages Safety-Checked
-                </span>
-
-                <strong className='analytics-stat-number'>
-                  {adminAnalytics.messagesSafetyChecked}
-                </strong>
-
-                <span className='analytics-stat-description'>
-                  Before AI processing
-                </span>
-
-              </article>
-
-
-              <article className='analytics-stat-card is-alert'>
-
-                <span className='analytics-stat-label'>
-                  Safety Check Errors
-                </span>
-
-                <strong className='analytics-stat-number'>
-                  {adminAnalytics.safetyCheckErrors}
-                </strong>
-
-                <span className='analytics-stat-description'>
-                  Failed safety checks
-                </span>
-
-              </article>
-
-
-              <article
-                className={`analytics-stat-card${adminAnalytics.sentToAIUnchecked > 0
-                  ? ' is-alert'
-                  : ''
-                  }`}
-              >
-
-                <span className='analytics-stat-label'>
-                  Sent to AI Unchecked
-                </span>
-
-                <strong className='analytics-stat-number'>
-                  {adminAnalytics.sentToAIUnchecked}
-                </strong>
-
-                <span className='analytics-stat-description'>
-                  Should always be 0
-                </span>
-
-              </article>
-
-            </div>
-
-          </section>
-
-          {/* COST & AI USAGE */}
-
-          <section className='analytics-card'>
-
-            <h2>Cost &amp; AI Usage</h2>
-
-            <p className='analytics-intro'>
-              AI token consumption and estimated cost over the last 7 days
-              ({aiUsage.configured ? `model: ${aiUsage.model}` : 'AI not configured'}).
-              Crisis and support templates use no AI, so they cost nothing.
-            </p>
-
-            <div className='analytics-summary-grid'>
-
-              <article className='analytics-stat-card'>
-                <span className='analytics-stat-label'>Estimated AI Cost</span>
-                <strong className='analytics-stat-number'>{formatUsd(aiUsage.estimatedCost)}</strong>
-                <span className='analytics-stat-description'>
-                  {formatUsd(aiUsage.avgCostPerRequest)} per AI reply on average
-                </span>
-              </article>
-
-              <article className='analytics-stat-card'>
-                <span className='analytics-stat-label'>Total Tokens</span>
-                <strong className='analytics-stat-number'>{formatNumber(aiUsage.totalTokens)}</strong>
-                <span className='analytics-stat-description'>Input and output tokens</span>
-              </article>
-
-              <article className='analytics-stat-card'>
-                <span className='analytics-stat-label'>AI Requests</span>
-                <strong className='analytics-stat-number'>{formatNumber(aiUsage.requests)}</strong>
-                <span className='analytics-stat-description'>
-                  Average reply time {(aiUsage.avgLatencyMs / 1000).toFixed(1)} s
-                </span>
-              </article>
-
-              <article className='analytics-stat-card'>
-                <span className='analytics-stat-label'>Budget Utilization</span>
-                <strong className='analytics-stat-number'>
-                  {aiUsage.budgetUtilization === null ? '—' : `${aiUsage.budgetUtilization}%`}
-                </strong>
-                <span className='analytics-stat-description'>
-                  {aiUsage.monthlyBudget === null
-                    ? `No monthly budget set (${formatUsd(aiUsage.monthToDateCost)} this month)`
-                    : `${formatUsd(aiUsage.monthToDateCost)} of ${formatUsd(aiUsage.monthlyBudget)} this month`}
-                </span>
-              </article>
-
-            </div>
-
-            {/* TOKEN CONSUMPTION AND COST PER DAY */}
-            <h3 className='analytics-subheading'>Tokens per Day</h3>
-            <div className='frequency-chart'>
-              {aiUsage.daily.map((item) => (
-                <div className='frequency-row' key={`tokens-${item.day}`}>
-                  <span>{item.day}</span>
-                  <div
-                    className='frequency-bar token-bar'
-                    role='img'
-                    aria-label={`${item.inputTokens} input and ${item.outputTokens} output tokens`}
-                  >
-                    <div
-                      className='token-bar-input'
-                      style={{ width: `${(item.inputTokens / maxDayTokens) * 100}%` }}
-                    ></div>
-                    <div
-                      className='token-bar-output'
-                      style={{ width: `${(item.outputTokens / maxDayTokens) * 100}%` }}
-                    ></div>
-                  </div>
-                  <strong>{formatNumber(item.inputTokens + item.outputTokens)}</strong>
-                </div>
-              ))}
-            </div>
-            <p className='chart-legend'>
-              <span className='legend-swatch token-bar-input'></span> Input tokens
-              <span className='legend-swatch token-bar-output'></span> Output tokens
-            </p>
-
-            <h3 className='analytics-subheading'>Estimated Cost per Day</h3>
-            <div className='frequency-chart'>
-              {aiUsage.daily.map((item) => (
-                <div className='frequency-row' key={`cost-${item.day}`}>
-                  <span>{item.day}</span>
-                  <div className='frequency-bar' aria-hidden='true'>
-                    <div
-                      className='frequency-bar-fill'
-                      style={{ width: `${(item.cost / maxDayCost) * 100}%` }}
-                    ></div>
-                  </div>
-                  <strong>{formatUsd(item.cost)}</strong>
-                </div>
-              ))}
-            </div>
-
-            <div className='tool-usage-list'>
-
-              <div className='tool-usage-item'>
-                <span>Input Tokens</span>
-                <strong>{formatNumber(aiUsage.inputTokens)}</strong>
-              </div>
-
-              <div className='tool-usage-item'>
-                <span>Output Tokens</span>
-                <strong>{formatNumber(aiUsage.outputTokens)}</strong>
-              </div>
-
-              {aiUsage.byModel.length === 0 && (
-                <div className='tool-usage-item'>
-                  <span>Cost by AI Model</span>
-                  <strong>No AI requests yet</strong>
-                </div>
-              )}
-
-              {aiUsage.byModel.map((item) => (
-                <div className='tool-usage-item' key={item.model}>
-                  <span>Cost by AI Model: {item.model}</span>
-                  <strong>{formatUsd(item.cost_usd)} ({formatNumber(item.requests)} requests)</strong>
-                </div>
-              ))}
-
-              <div className='tool-usage-item'>
-                <span>Replies Without AI (reviewed templates)</span>
-                <strong>{formatNumber(aiUsage.repliesWithoutAI)}</strong>
-              </div>
-
-              <div className='tool-usage-item'>
-                <span>RAG and Embedding Usage</span>
-                <strong>Not used</strong>
-              </div>
-
-            </div>
-
-          </section>
-
-
-          {/*  SESSION FREQUENCY */}
-
-          <section className='analytics-card'>
-
-            <h2>Session Frequency</h2>
-
-            <p className='analytics-intro'>
-              Sessions per day over the last 7 days.
-            </p>
-
-
-            <div className='frequency-chart'>
-
-              {adminAnalytics.weekdays.map((item) => (
-
-                <div
-                  className='frequency-row'
-                  key={item.day}
-                >
-
-                  <span>
-                    {item.day}
-                  </span>
-
-
-                  <div
-                    className='frequency-bar'
-                    aria-hidden='true'
-                  >
-
-                    <div
-                      className='frequency-bar-fill'
-                      style={{
-                        width: `${(item.count / maxDayCount) * 100}%`
-                      }}
-                    ></div>
-
-                  </div>
-
-
-                  <strong>
-                    {item.count}
-                  </strong>
-
-                </div>
-
-              ))}
-
-            </div>
-
-          </section>
-
-
-          {/* ESCALATIONS */}
-
-          <section className='analytics-card'>
-
-            <h2>Escalations</h2>
-
-            <p className='analytics-intro'>
-              Safety concerns routed to additional support during
-              the last 7 days.
-            </p>
-
-
-            <div className='analytics-summary-grid'>
-
-              <article className='analytics-stat-card'>
-
-                <span className='analytics-stat-label'>
-                  Total Escalations
-                </span>
-
-                <strong className='analytics-stat-number'>
-                  {adminAnalytics.escalations}
-                </strong>
-
-                <span className='analytics-stat-description'>
-                  Routed to support resources
-                </span>
-
-              </article>
-
-              <article className='analytics-stat-card'>
-                <span className='analytics-stat-label'>Crisis</span>
-                <strong className='analytics-stat-number'>{adminAnalytics.crisisEscalations}</strong>
-                <span className='analytics-stat-description'>Crisis screen and resources, no AI</span>
-              </article>
-
-              <article className='analytics-stat-card'>
-                <span className='analytics-stat-label'>Support</span>
-                <strong className='analytics-stat-number'>{adminAnalytics.supportEscalations}</strong>
-                <span className='analytics-stat-description'>Reply shown with support resources</span>
-              </article>
-
-            </div>
-
-          </section>
-
-
-          {/* SAFETY DECISIONS */}
-
-          <section className='analytics-card'>
-
-            <h2>Safety Decisions</h2>
-
-            <p className='analytics-intro'>
-              Results from safety screening across all users.
-              {' '}Sensitive topics answered with a boundary: {adminAnalytics.boundaryReplies}.
-              AI replies blocked by the output check: {adminAnalytics.repliesBlocked}.
-            </p>
-
-
-            <div className='analytics-summary-grid'>
-
-              <article className='analytics-stat-card'>
-
-                <span className='analytics-stat-label'>
-                  Clear
-                </span>
-
-                <strong className='analytics-stat-number'>
-                  {adminAnalytics.safetyDecisions.clear}
-                </strong>
-
-                <span className='analytics-stat-description'>
-                  Approved to continue
-                </span>
-
-              </article>
-
-
-              <article className='analytics-stat-card'>
-
-                <span className='analytics-stat-label'>
-                  Concern
-                </span>
-
-                <strong className='analytics-stat-number'>
-                  {adminAnalytics.safetyDecisions.concern}
-                </strong>
-
-                <span className='analytics-stat-description'>
-                  Routed for additional support
-                </span>
-
-              </article>
-
-
-              <article className='analytics-stat-card'>
-
-                <span className='analytics-stat-label'>
-                  Error
-                </span>
-
-                <strong className='analytics-stat-number'>
-                  {adminAnalytics.safetyDecisions.error}
-                </strong>
-
-                <span className='analytics-stat-description'>
-                  Safety check failures
-                </span>
-
-              </article>
-
-            </div>
-
-          </section>
-
-
-          {/* COPING TOOL ACTIVITY */}
-
-          <section className='analytics-card'>
-
-            <h2>Coping Tool Activity</h2>
-
-            <p className='analytics-intro'>
-              Completed guided exercises across all users.
-              Sample data: coping-tool usage is not stored by the backend yet.
-            </p>
-
-
-            <div className='tool-usage-list'>
-
-              {SAMPLE_COPING_TOOLS.map((tool) => (
-
-                <div
-                  className='tool-usage-item'
-                  key={tool.name}
-                >
-
-                  <span>
-                    {tool.name}
-                  </span>
-
-                  <strong>
-                    {tool.completed} completed
-                  </strong>
-
-                </div>
-
-              ))}
-
-            </div>
-
-          </section>
-
-
-          {/*ARCHITECTURE HEALTH */}
-
-          <section className='analytics-card'>
-
-            <h2>Architecture Health</h2>
-
-            <p className='analytics-intro'>
-              Current health of the main application layers.
-            </p>
-
-
-            <div className='admin-health-list'>
-
-              {screenLoading && (
-                <p className='status-text' role='status'>Checking services...</p>
-              )}
-
-              {!screenLoading && architectureHealth.map((layer) => (
-
-                <div
-                  className='admin-health-item'
-                  key={layer.name}
-                >
-
-                  <span>
-                    {layer.name}
-                  </span>
-
-                  <strong>
-                    {layer.status}{layer.detail ? ` (${layer.detail})` : ''}
-                  </strong>
-
-                </div>
-
-              ))}
-
-            </div>
-
-          </section>
-
-
-          {/*  RECENT LOG EVENTS */}
-
-          <section className='analytics-card'>
-
-            <h2>Recent Log Events</h2>
-
-            <p className='analytics-intro'>
-              Recent operational and safety events.
-              Raw user messages are not displayed.
-            </p>
-
-
-            <div className='admin-log-list'>
-
-              {screenLoading && (
-                <p className='status-text' role='status'>Loading recent events...</p>
-              )}
-
-              {screenLoadError && (
-                <p className='login-error' role='alert'>{screenLoadError}</p>
-              )}
-
-              {!screenLoading && !screenLoadError && recentLogs.length === 0 && (
-                <p className='status-text'>No events recorded yet.</p>
-              )}
-
-              {recentLogs.map((log, index) => (
-
-                <div
-                  className={`admin-log-item ${log.status === 'Warning'
-                    ? 'is-warning'
-                    : log.status === 'Error'
-                      ? 'is-error'
-                      : ''
-                    }`}
-                  key={`${log.time}-${index}`}
-                >
-
-                  <div>
-
-                    <span>
-                      {formatLogTime(log.time)} · {log.type}
+                    <span className='analytics-stat-label'>
+                      Active Users
                     </span>
 
-                    <strong>
-                      {log.message}
+                    <strong className='analytics-stat-number'>
+                      {adminAnalytics.activeUsers}
                     </strong>
 
-                  </div>
+                    <span className='analytics-stat-description'>
+                      Users with activity
+                    </span>
 
-                  <span>
-                    {log.status}
-                  </span>
+                  </article>
+
+
+                  <article className='analytics-stat-card'>
+
+                    <span className='analytics-stat-label'>
+                      Total Sessions
+                    </span>
+
+                    <strong className='analytics-stat-number'>
+                      {adminAnalytics.totalSessions}
+                    </strong>
+
+                    <span className='analytics-stat-description'>
+                      All users combined
+                    </span>
+
+                  </article>
+
+
+                  <article className='analytics-stat-card'>
+
+                    <span className='analytics-stat-label'>
+                      Sessions per Active User
+                    </span>
+
+                    <strong className='analytics-stat-number'>
+                      {adminAnalytics.sessionsPerUser}
+                    </strong>
+
+                    <span className='analytics-stat-description'>
+                      Average over 7 days
+                    </span>
+
+                  </article>
+
+
+                  <article className='analytics-stat-card'>
+
+                    <span className='analytics-stat-label'>
+                      Messages Safety-Checked
+                    </span>
+
+                    <strong className='analytics-stat-number'>
+                      {adminAnalytics.messagesSafetyChecked}
+                    </strong>
+
+                    <span className='analytics-stat-description'>
+                      Before AI processing
+                    </span>
+
+                  </article>
+
+
+                  <article className='analytics-stat-card is-alert'>
+
+                    <span className='analytics-stat-label'>
+                      Safety Check Errors
+                    </span>
+
+                    <strong className='analytics-stat-number'>
+                      {adminAnalytics.safetyCheckErrors}
+                    </strong>
+
+                    <span className='analytics-stat-description'>
+                      Failed safety checks
+                    </span>
+
+                  </article>
+
+
+                  <article
+                    className={`analytics-stat-card${adminAnalytics.sentToAIUnchecked > 0
+                      ? ' is-alert'
+                      : ''
+                      }`}
+                  >
+
+                    <span className='analytics-stat-label'>
+                      Sent to AI Unchecked
+                    </span>
+
+                    <strong className='analytics-stat-number'>
+                      {adminAnalytics.sentToAIUnchecked}
+                    </strong>
+
+                    <span className='analytics-stat-description'>
+                      Should always be 0
+                    </span>
+
+                  </article>
 
                 </div>
 
-              ))}
+              </section>
 
-            </div>
+              {/* COST & AI USAGE */}
 
-          </section>
+              <section className='analytics-card'>
+
+                <h2>Cost &amp; AI Usage</h2>
+
+                <p className='analytics-intro'>
+                  AI token consumption and estimated cost over the last 7 days
+                  ({aiUsage.configured ? `model: ${aiUsage.model}` : 'AI not configured'}).
+                  Crisis and support templates use no AI, so they cost nothing.
+                </p>
+
+                <div className='analytics-summary-grid'>
+
+                  <article className='analytics-stat-card'>
+                    <span className='analytics-stat-label'>Estimated AI Cost</span>
+                    <strong className='analytics-stat-number'>{formatUsd(aiUsage.estimatedCost)}</strong>
+                    <span className='analytics-stat-description'>
+                      {formatUsd(aiUsage.avgCostPerRequest)} per AI reply on average
+                    </span>
+                  </article>
+
+                  <article className='analytics-stat-card'>
+                    <span className='analytics-stat-label'>Total Tokens</span>
+                    <strong className='analytics-stat-number'>{formatNumber(aiUsage.totalTokens)}</strong>
+                    <span className='analytics-stat-description'>Input and output tokens</span>
+                  </article>
+
+                  <article className='analytics-stat-card'>
+                    <span className='analytics-stat-label'>AI Requests</span>
+                    <strong className='analytics-stat-number'>{formatNumber(aiUsage.requests)}</strong>
+                    <span className='analytics-stat-description'>
+                      Average reply time {(aiUsage.avgLatencyMs / 1000).toFixed(1)} s
+                    </span>
+                  </article>
+
+                  <article className='analytics-stat-card'>
+                    <span className='analytics-stat-label'>Budget Utilization</span>
+                    <strong className='analytics-stat-number'>
+                      {aiUsage.budgetUtilization === null ? '—' : `${aiUsage.budgetUtilization}%`}
+                    </strong>
+                    <span className='analytics-stat-description'>
+                      {aiUsage.monthlyBudget === null
+                        ? `No monthly budget set (${formatUsd(aiUsage.monthToDateCost)} this month)`
+                        : `${formatUsd(aiUsage.monthToDateCost)} of ${formatUsd(aiUsage.monthlyBudget)} this month`}
+                    </span>
+                  </article>
+
+                </div>
+
+                {/* TOKEN CONSUMPTION AND COST PER DAY */}
+                <h3 className='analytics-subheading'>Tokens per Day</h3>
+                <div className='frequency-chart'>
+                  {aiUsage.daily.map((item) => (
+                    <div className='frequency-row' key={`tokens-${item.day}`}>
+                      <span>{item.day}</span>
+                      <div
+                        className='frequency-bar token-bar'
+                        role='img'
+                        aria-label={`${item.inputTokens} input and ${item.outputTokens} output tokens`}
+                      >
+                        <div
+                          className='token-bar-input'
+                          style={{ width: `${(item.inputTokens / maxDayTokens) * 100}%` }}
+                        ></div>
+                        <div
+                          className='token-bar-output'
+                          style={{ width: `${(item.outputTokens / maxDayTokens) * 100}%` }}
+                        ></div>
+                      </div>
+                      <strong>{formatNumber(item.inputTokens + item.outputTokens)}</strong>
+                    </div>
+                  ))}
+                </div>
+                <p className='chart-legend'>
+                  <span className='legend-swatch token-bar-input'></span> Input tokens
+                  <span className='legend-swatch token-bar-output'></span> Output tokens
+                </p>
+
+                <h3 className='analytics-subheading'>Estimated Cost per Day</h3>
+                <div className='frequency-chart'>
+                  {aiUsage.daily.map((item) => (
+                    <div className='frequency-row' key={`cost-${item.day}`}>
+                      <span>{item.day}</span>
+                      <div className='frequency-bar' aria-hidden='true'>
+                        <div
+                          className='frequency-bar-fill'
+                          style={{ width: `${(item.cost / maxDayCost) * 100}%` }}
+                        ></div>
+                      </div>
+                      <strong>{formatUsd(item.cost)}</strong>
+                    </div>
+                  ))}
+                </div>
+
+                <div className='tool-usage-list'>
+
+                  <div className='tool-usage-item'>
+                    <span>Input Tokens</span>
+                    <strong>{formatNumber(aiUsage.inputTokens)}</strong>
+                  </div>
+
+                  <div className='tool-usage-item'>
+                    <span>Output Tokens</span>
+                    <strong>{formatNumber(aiUsage.outputTokens)}</strong>
+                  </div>
+
+                  {aiUsage.byModel.length === 0 && (
+                    <div className='tool-usage-item'>
+                      <span>Cost by AI Model</span>
+                      <strong>No AI requests yet</strong>
+                    </div>
+                  )}
+
+                  {aiUsage.byModel.map((item) => (
+                    <div className='tool-usage-item' key={item.model}>
+                      <span>Cost by AI Model: {item.model}</span>
+                      <strong>{formatUsd(item.cost_usd)} ({formatNumber(item.requests)} requests)</strong>
+                    </div>
+                  ))}
+
+                  <div className='tool-usage-item'>
+                    <span>Replies Without AI (reviewed templates)</span>
+                    <strong>{formatNumber(aiUsage.repliesWithoutAI)}</strong>
+                  </div>
+
+                  <div className='tool-usage-item'>
+                    <span>RAG and Embedding Usage</span>
+                    <strong>Not used</strong>
+                  </div>
+
+                </div>
+
+              </section>
 
 
-          {/* ADMIN PRIVACY NOTE */}
+              {/*  SESSION FREQUENCY */}
 
-          <section className='analytics-privacy-note'>
+              <section className='analytics-card'>
 
-            <strong>
-              Restricted to administrators
-            </strong>
+                <h2>Session Frequency</h2>
 
-            <p>
-              This dashboard shows aggregate system and safety information.
-              Individual users and raw conversation messages are not
-              displayed here.
-            </p>
+                <p className='analytics-intro'>
+                  Sessions per day over the last 7 days.
+                </p>
 
-          </section>
 
+                <div className='frequency-chart'>
+
+                  {adminAnalytics.weekdays.map((item) => (
+
+                    <div
+                      className='frequency-row'
+                      key={item.day}
+                    >
+
+                      <span>
+                        {item.day}
+                      </span>
+
+
+                      <div
+                        className='frequency-bar'
+                        aria-hidden='true'
+                      >
+
+                        <div
+                          className='frequency-bar-fill'
+                          style={{
+                            width: `${(item.count / maxDayCount) * 100}%`
+                          }}
+                        ></div>
+
+                      </div>
+
+
+                      <strong>
+                        {item.count}
+                      </strong>
+
+                    </div>
+
+                  ))}
+
+                </div>
+
+              </section>
+
+
+              {/* ESCALATIONS */}
+
+              <section className='analytics-card'>
+
+                <h2>Escalations</h2>
+
+                <p className='analytics-intro'>
+                  Safety concerns routed to additional support during
+                  the last 7 days.
+                </p>
+
+
+                <div className='analytics-summary-grid'>
+
+                  <article className='analytics-stat-card'>
+
+                    <span className='analytics-stat-label'>
+                      Total Escalations
+                    </span>
+
+                    <strong className='analytics-stat-number'>
+                      {adminAnalytics.escalations}
+                    </strong>
+
+                    <span className='analytics-stat-description'>
+                      Routed to support resources
+                    </span>
+
+                  </article>
+
+                  <article className='analytics-stat-card'>
+                    <span className='analytics-stat-label'>Crisis</span>
+                    <strong className='analytics-stat-number'>{adminAnalytics.crisisEscalations}</strong>
+                    <span className='analytics-stat-description'>Crisis screen and resources, no AI</span>
+                  </article>
+
+                  <article className='analytics-stat-card'>
+                    <span className='analytics-stat-label'>Support</span>
+                    <strong className='analytics-stat-number'>{adminAnalytics.supportEscalations}</strong>
+                    <span className='analytics-stat-description'>Reply shown with support resources</span>
+                  </article>
+
+                </div>
+
+              </section>
+
+
+              {/* SAFETY DECISIONS */}
+
+              <section className='analytics-card'>
+
+                <h2>Safety Decisions</h2>
+
+                <p className='analytics-intro'>
+                  Results from safety screening across all users.
+                  {' '}Sensitive topics answered with a boundary: {adminAnalytics.boundaryReplies}.
+                  AI replies blocked by the output check: {adminAnalytics.repliesBlocked}.
+                </p>
+
+
+                <div className='analytics-summary-grid'>
+
+                  <article className='analytics-stat-card'>
+
+                    <span className='analytics-stat-label'>
+                      Clear
+                    </span>
+
+                    <strong className='analytics-stat-number'>
+                      {adminAnalytics.safetyDecisions.clear}
+                    </strong>
+
+                    <span className='analytics-stat-description'>
+                      Approved to continue
+                    </span>
+
+                  </article>
+
+
+                  <article className='analytics-stat-card'>
+
+                    <span className='analytics-stat-label'>
+                      Concern
+                    </span>
+
+                    <strong className='analytics-stat-number'>
+                      {adminAnalytics.safetyDecisions.concern}
+                    </strong>
+
+                    <span className='analytics-stat-description'>
+                      Routed for additional support
+                    </span>
+
+                  </article>
+
+
+                  <article className='analytics-stat-card'>
+
+                    <span className='analytics-stat-label'>
+                      Error
+                    </span>
+
+                    <strong className='analytics-stat-number'>
+                      {adminAnalytics.safetyDecisions.error}
+                    </strong>
+
+                    <span className='analytics-stat-description'>
+                      Safety check failures
+                    </span>
+
+                  </article>
+
+                </div>
+
+              </section>
+
+
+              {/* COPING TOOL ACTIVITY */}
+
+              <section className='analytics-card'>
+
+                <h2>Coping Tool Activity</h2>
+
+                <p className='analytics-intro'>
+                  Completed guided exercises across all users.
+                  Sample data: coping-tool usage is not stored by the backend yet.
+                </p>
+
+
+                <div className='tool-usage-list'>
+
+                  {SAMPLE_COPING_TOOLS.map((tool) => (
+
+                    <div
+                      className='tool-usage-item'
+                      key={tool.name}
+                    >
+
+                      <span>
+                        {tool.name}
+                      </span>
+
+                      <strong>
+                        {tool.completed} completed
+                      </strong>
+
+                    </div>
+
+                  ))}
+
+                </div>
+
+              </section>
+
+
+              {/*ARCHITECTURE HEALTH */}
+
+              <section className='analytics-card'>
+
+                <h2>Architecture Health</h2>
+
+                <p className='analytics-intro'>
+                  Current health of the main application layers.
+                </p>
+
+
+                <div className='admin-health-list'>
+
+                  {screenLoading && (
+                    <p className='status-text' role='status'>Checking services...</p>
+                  )}
+
+                  {!screenLoading && architectureHealth.map((layer) => (
+
+                    <div
+                      className='admin-health-item'
+                      key={layer.name}
+                    >
+
+                      <span>
+                        {layer.name}
+                      </span>
+
+                      <strong>
+                        {layer.status}{layer.detail ? ` (${layer.detail})` : ''}
+                      </strong>
+
+                    </div>
+
+                  ))}
+
+                </div>
+
+              </section>
+
+
+              {/*  RECENT LOG EVENTS */}
+
+              <section className='analytics-card'>
+
+                <h2>Recent Log Events</h2>
+
+                <p className='analytics-intro'>
+                  Recent operational and safety events.
+                  Raw user messages are not displayed.
+                </p>
+
+
+                <div className='admin-log-list'>
+
+                  {screenLoading && (
+                    <p className='status-text' role='status'>Loading recent events...</p>
+                  )}
+
+                  {screenLoadError && (
+                    <p className='login-error' role='alert'>{screenLoadError}</p>
+                  )}
+
+                  {!screenLoading && !screenLoadError && recentLogs.length === 0 && (
+                    <p className='status-text'>No events recorded yet.</p>
+                  )}
+
+                  {recentLogs.map((log, index) => (
+
+                    <div
+                      className={`admin-log-item ${log.status === 'Warning'
+                        ? 'is-warning'
+                        : log.status === 'Error'
+                          ? 'is-error'
+                          : ''
+                        }`}
+                      key={`${log.time}-${index}`}
+                    >
+
+                      <div>
+
+                        <span>
+                          {formatLogTime(log.time)} · {log.type}
+                        </span>
+
+                        <strong>
+                          {log.message}
+                        </strong>
+
+                      </div>
+
+                      <span>
+                        {log.status}
+                      </span>
+
+                    </div>
+
+                  ))}
+
+                </div>
+
+              </section>
+
+
+              {/* ADMIN PRIVACY NOTE */}
+
+              <section className='analytics-privacy-note'>
+
+                <strong>
+                  Restricted to administrators
+                </strong>
+
+                <p>
+                  This dashboard shows aggregate system and safety information.
+                  Individual users and raw conversation messages are not
+                  displayed here.
+                </p>
+
+              </section>
+            </>
+          )}
 
         </main>
 
@@ -2770,6 +2842,7 @@ function App() {
   // Used when the safety service cannot complete its check.
   // The system must fail closed and must NOT send the unchecked
   // message to the conversational AI.
+
   if (currentScreen === 'safety-error') {
     return (
       <div className='app'>
