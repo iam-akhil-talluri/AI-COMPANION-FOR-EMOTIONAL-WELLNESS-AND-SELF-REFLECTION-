@@ -1,5 +1,13 @@
+#Terraform
 .terraform/
-*.tfstate
-*.tfstate.*
+.tfstate
+.tfstate.
+.tfvars
 crash.log
-*.tfvars
+
+#Secrets
+.env
+
+#Build folders
+dist/
+node_modules/
