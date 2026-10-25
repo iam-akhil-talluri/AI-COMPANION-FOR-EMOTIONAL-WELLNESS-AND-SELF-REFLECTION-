@@ -154,19 +154,27 @@ resource "aws_security_group" "ec2_sg" {
 #and uses the SSM role/profile for secure
 #access instead of SSH.
 #-----------------------------------------------
+data "aws_ssm_parameter" "al2023" {
+ name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+}
+
 resource "aws_instance" "capstone_app_server" {
-  ami                    = "ami-0c02fb55956c7d316" # Amazon Linux 2023, us-east-1
-  instance_type         = "t3.micro" # Free tier eligible
+ ami = data.aws_ssm_parameter.al2023.value
+ instance_type = "t3.micro"
+ subnet_id = aws_subnet.private_subnet.id
+ vpc_security_group_ids = [aws_security_group.ec2_sg.id]
+ iam_instance_profile = aws_iam_instance_profile.ec2_ssm_profile.name
 
-  subnet_id             = aws_subnet.private_subnet.id
-  vpc_security_group_ids = [aws_security_group.ec2_sg.id]
-  iam_instance_profile   = aws_iam_instance_profile.ec2_ssm_profile.name
+ associate_public_ip_address = false
 
-  associate_public_ip_address = false
+ root_block_device {
+ volume_size = 20
+ encrypted = true
+ }
 
-  tags = {
-    Name = "capstone-app-server"
-  }
+ tags = {
+ Name = "capstone-app-server"
+ }
 }
 #-----------------------------------------------
 #CloudWatch Log Group: Captures every Session
@@ -377,7 +385,7 @@ resource "aws_iam_user_policy" "mensah_ec2_describe" {
         ]
         Resource = [
           aws_instance.capstone_app_server.arn,
-          "arn:aws:ssm::*:document/SSM-SessionManagerRunShell"
+          "arn:aws:ssm:*:*:document/SSM-SessionManagerRunShell"
         ]
       }
     ]
