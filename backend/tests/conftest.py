@@ -16,6 +16,7 @@ os.environ.update({
     "RATE_LIMIT_PER_MINUTE": "1000",
     "RATE_LIMIT_PER_HOUR": "1000",
     "RETENTION_INTERVAL_HOURS": "0",
+    "MEMORY_INTERVAL_MINUTES": "0",
     "CORS_ORIGINS": "http://localhost:5173",
     # Tests never call OpenAI, even when backend/.env holds a real key.
     "OPENAI_API_KEY": "",
@@ -92,8 +93,10 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
     def override_get_db() -> Generator[Session, None, None]:
         yield db_session
 
+    # Background memory notes (written after POST /api/sessions) use the test database too.
+    factory = sessionmaker(bind=db_session.get_bind(), autoflush=False, expire_on_commit=False)
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as test_client:
+    with patch("app.services.memory_service.get_sessionmaker", return_value=factory), TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
 

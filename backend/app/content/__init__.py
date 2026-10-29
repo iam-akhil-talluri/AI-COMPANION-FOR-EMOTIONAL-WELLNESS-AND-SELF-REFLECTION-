@@ -1,4 +1,4 @@
-"""Reviewed, static content: the system prompt, safety templates and support resources.
+"""Reviewed, static content: the system and summary prompts, safety templates and support resources.
 
 The wording lives in Markdown and JSON so reviewers can change it without touching Python.
 Files are read once per process; restart the server after editing them.
@@ -28,6 +28,12 @@ def _load_json(name: str) -> dict:
 @lru_cache
 def system_prompt() -> str:
     return (CONTENT_DIR / "system_prompt.md").read_text(encoding="utf-8").strip()
+
+
+@lru_cache
+def summary_prompt() -> str:
+    """Instructions for writing a session's memory note (app/services/memory_service.py)."""
+    return (CONTENT_DIR / "summary_prompt.md").read_text(encoding="utf-8").strip()
 
 
 @lru_cache

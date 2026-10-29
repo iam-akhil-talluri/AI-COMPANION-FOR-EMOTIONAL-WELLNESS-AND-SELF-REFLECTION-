@@ -43,6 +43,8 @@ class LoginRequest(BaseModel):
 class UserOut(BaseModel):
     username: str
     role: Literal["user", "admin"]
+    # Cross-session memory: notes from earlier sessions are sent with each reply.
+    memory_enabled: bool = True
 
 
 class AuthResponse(BaseModel):

@@ -1,7 +1,7 @@
 """Data retention.
 
-Deletes transcript text older than RETENTION_DAYS and empty sessions older than
-EMPTY_SESSION_GRACE. Session metadata is kept.
+Deletes transcript text (and the session's memory note) older than RETENTION_DAYS and empty
+sessions older than EMPTY_SESSION_GRACE. Session metadata is kept.
 """
 
 import asyncio
@@ -43,7 +43,7 @@ def purge_expired(db: Session, retention_days: int) -> int:
         batch = expired[start:start + _BATCH]
         removed += db.execute(delete(Message).where(Message.session_id.in_(batch))).rowcount or 0
         db.execute(update(ConversationSession).where(ConversationSession.id.in_(batch))
-                   .values(transcript_purged_at=now))
+                   .values(transcript_purged_at=now, summary=None, summary_updated_at=None))
     if removed or expired or empty:
         log_event(db, "retention_purge", detail=f"rows={removed} sessions={len(expired)} empty_sessions={empty}")
     db.commit()

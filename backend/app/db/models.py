@@ -38,6 +38,8 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     # Incremented to revoke previously issued tokens.
     token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Cross-session memory: short notes from earlier sessions are sent with each reply.
+    memory_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utc_now)
     last_login_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
@@ -64,6 +66,11 @@ class ConversationSession(Base):
     message_count: Mapped[int] = mapped_column(Integer, default=0)
     # Set when the retention job deletes the transcript.
     transcript_purged_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    # Safety-checked memory note (app/services/memory_service.py); also the History preview.
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary_updated_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    # message_count when the session was last summarized; a session is summarized again only after new messages.
+    summarized_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
     user: Mapped[User] = relationship(back_populates="sessions")
     messages: Mapped[list["Message"]] = relationship(
@@ -87,6 +94,7 @@ class Message(Base):
 RISK_LEVELS = ("low", "moderate", "elevated", "high")
 SAFETY_STAGES = ("input", "output")
 INTERACTION_STATUSES = ("ok", "support", "crisis", "blocked", "safety_error", "ai_error")
+INTERACTION_PURPOSES = ("chat", "summary")
 
 
 class SafetyEvent(Base):
@@ -121,11 +129,14 @@ class Interaction(Base):
     __tablename__ = "interactions"
     __table_args__ = (
         CheckConstraint(_in("status", INTERACTION_STATUSES), name="ck_interactions_status"),
+        CheckConstraint(_in("purpose", INTERACTION_PURPOSES), name="ck_interactions_purpose"),
         MYSQL_TABLE_OPTIONS,
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     session_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # chat: a reply to a message. summary: a memory note (counts toward cost, not toward chat metrics).
+    purpose: Mapped[str] = mapped_column(String(20), default="chat", server_default="chat")
     # False only for replies that did not go through the safety layer (e.g. a demo provider).
     safety_checked: Mapped[bool] = mapped_column(Boolean, default=False)
     risk_level: Mapped[str | None] = mapped_column(String(10), nullable=True)

@@ -26,6 +26,10 @@ class ReplyContext:
     message_count: int = 0
     # True when an earlier message in this session was escalated (elevated or high risk).
     prior_risk: bool = False
+    # True when another of the user's sessions had an escalated message in the last 24 hours.
+    recent_risk_elsewhere: bool = False
+    # Safety-checked notes from the user's other sessions (cross-session memory), newest first.
+    memory: tuple[str, ...] = ()
     # True when AI_MONTHLY_BUDGET_USD has been reached this month.
     ai_budget_exhausted: bool = False
 

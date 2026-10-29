@@ -8,13 +8,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, health, logs, sessions
+from app.api import auth, health, logs, memory, sessions
 from app.config import Settings, get_settings
 from app.errors import register_error_handlers
 from app.logging_config import configure_logging
 from app.middleware import RequestGuardMiddleware, SecurityHeadersMiddleware
 from app.services import reply_provider
 from app.services.companion import companion_reply
+from app.services.memory_service import memory_loop
 from app.services.retention import retention_loop
 
 logger = logging.getLogger(__name__)
@@ -29,14 +30,16 @@ async def lifespan(app: FastAPI):
     if not settings.ai_configured:
         logger.warning("OPENAI_API_KEY is not set: everyday messages will return 503 reply_unavailable; "
                        "crisis and support messages still get the reviewed response")
-    retention_task = None
+    tasks = []
     if settings.retention_days > 0 and settings.retention_interval_hours > 0:
-        retention_task = asyncio.create_task(retention_loop(settings))
+        tasks.append(asyncio.create_task(retention_loop(settings)))
+    if settings.memory_enabled and settings.store_transcripts and settings.memory_interval_minutes > 0:
+        tasks.append(asyncio.create_task(memory_loop(settings)))
     yield
-    if retention_task is not None:
-        retention_task.cancel()
+    for task in tasks:
+        task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
-            await retention_task
+            await task
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -44,7 +47,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     docs = settings.api_docs_enabled
     app = FastAPI(
         title="AI Companion for Emotional Wellness & Self-Reflection",
-        description="Backend API: accounts, conversation sessions and memory, safety-checked AI replies, "
+        description="Backend API: accounts, conversation sessions and history, cross-session memory, "
+        "safety-checked AI replies, "
         "logging, analytics and health checks. "
         "This system is not therapy, medical care, diagnosis, or crisis intervention.",
         version="1.0.0",
@@ -63,13 +67,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_credentials=False,  # Bearer tokens only; no cookies.
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
-        expose_headers=["X-Request-ID", "Retry-After"],
+        expose_headers=["X-Request-ID", "Retry-After", "X-Total-Count"],
         max_age=600,
     )
     app.add_middleware(SecurityHeadersMiddleware)
 
     register_error_handlers(app)
-    for router in (health.router, auth.router, sessions.router, logs.router):
+    for router in (health.router, auth.router, sessions.router, memory.router, logs.router):
         app.include_router(router)
 
     # Every message goes through the safety layer before any AI call (app/services/companion.py).

@@ -71,6 +71,9 @@ class AIUsage(BaseModel):
     avg_latency_ms: int
     # Replies from reviewed templates (crisis and support): no AI cost.
     replies_without_ai: int
+    # Cross-session memory notes written (included in requests, tokens and cost above).
+    memory_summaries: int = 0
+    memory_cost_usd: float = 0.0
     month_to_date_cost_usd: float
     monthly_budget_usd: float | None
     budget_utilization_pct: float | None

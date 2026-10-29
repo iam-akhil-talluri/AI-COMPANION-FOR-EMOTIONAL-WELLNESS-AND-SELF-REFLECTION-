@@ -2,13 +2,14 @@
 
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.models import ConversationSession, Message
 from app.db.types import utc_now
 
 GENERIC_TITLES = {"conversation": "Conversation", "reflection": "Reflection"}
+_LIKE_ESCAPE = "!"
 
 
 def create_session(db: Session, user_id: int, session_type: str = "conversation", title: str | None = None,
@@ -29,17 +30,50 @@ def get_owned_session(db: Session, session_id: str, user_id: int) -> Conversatio
     return conversation
 
 
-def list_sessions(db: Session, user_id: int, limit: int = 50, offset: int = 0) -> list[ConversationSession]:
+def _history_filters(user_id: int, session_type: str | None = None, query: str | None = None) -> list:
+    """Filters for the user's History: non-empty, not purged, optionally by type and by text."""
+    filters = [ConversationSession.user_id == user_id, ConversationSession.transcript_purged_at.is_(None),
+               ConversationSession.message_count > 0]
+    if session_type:
+        filters.append(ConversationSession.type == session_type)
+    if query and query.strip():
+        # Case-insensitive match on the title or the text of the session's own messages.
+        # "%" and "_" typed by the user are matched literally.
+        term = query.strip().lower()
+        for char in (_LIKE_ESCAPE, "%", "_"):
+            term = term.replace(char, _LIKE_ESCAPE + char)
+        pattern = f"%{term}%"
+        in_messages = (select(Message.id)
+                       .where(Message.session_id == ConversationSession.id,
+                              func.lower(Message.content).like(pattern, escape=_LIKE_ESCAPE))
+                       .exists())
+        filters.append(or_(func.lower(ConversationSession.title).like(pattern, escape=_LIKE_ESCAPE), in_messages))
+    return filters
+
+
+def list_sessions(db: Session, user_id: int, limit: int = 50, offset: int = 0, session_type: str | None = None,
+                  query: str | None = None) -> list[ConversationSession]:
     """List the user's non-empty sessions, most recently active first."""
     stmt = (
         select(ConversationSession)
-        .where(ConversationSession.user_id == user_id, ConversationSession.transcript_purged_at.is_(None),
-               ConversationSession.message_count > 0)
+        .where(*_history_filters(user_id, session_type, query))
         .order_by(ConversationSession.last_active.desc(), ConversationSession.id)
         .limit(limit)
         .offset(offset)
     )
     return list(db.scalars(stmt))
+
+
+def count_sessions(db: Session, user_id: int, session_type: str | None = None, query: str | None = None) -> int:
+    stmt = select(func.count(ConversationSession.id)).where(*_history_filters(user_id, session_type, query))
+    return db.scalar(stmt) or 0
+
+
+def export_history(db: Session, user_id: int) -> list[tuple[ConversationSession, list[Message]]]:
+    """All of the user's History with its messages, most recently active first."""
+    sessions = list(db.scalars(select(ConversationSession).where(*_history_filters(user_id))
+                               .order_by(ConversationSession.last_active.desc(), ConversationSession.id)))
+    return [(s, get_messages(db, s.id)) for s in sessions]
 
 
 def get_messages(db: Session, session_id: str) -> list[Message]:
@@ -89,3 +123,13 @@ def has_generic_title(conversation: ConversationSession) -> bool:
 def delete_session(db: Session, conversation: ConversationSession) -> None:
     db.delete(conversation)  # Messages are removed by cascade.
     db.commit()
+
+
+def delete_all_sessions(db: Session, user_id: int) -> int:
+    """Delete every session of the user, with their messages and memory notes. Returns the count."""
+    ids = list(db.scalars(select(ConversationSession.id).where(ConversationSession.user_id == user_id)))
+    if ids:
+        # Explicit message delete: bulk deletes do not run ORM cascades, and SQLite may lack ON DELETE.
+        db.execute(delete(Message).where(Message.session_id.in_(ids)))
+        db.execute(delete(ConversationSession).where(ConversationSession.id.in_(ids)))
+    return len(ids)

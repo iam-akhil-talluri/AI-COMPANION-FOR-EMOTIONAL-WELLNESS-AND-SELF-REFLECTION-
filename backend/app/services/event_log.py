@@ -28,6 +28,12 @@ EVENT_TYPES = {
     "escalation_triggered",
     "response_blocked",
     "safety_unavailable",
+    "memory_summarized",
+    "memory_summary_skipped",
+    "memory_cleared",
+    "memory_setting_changed",
+    "history_cleared",
+    "history_exported",
 }
 
 _LEVELS = {"info": logging.INFO, "warning": logging.WARNING, "error": logging.ERROR}
@@ -48,6 +54,12 @@ _LOG_LABELS = {
     "escalation_triggered": ("Safety", "Safety concern routed to support resources"),
     "response_blocked": ("Safety", "AI reply blocked by the output check"),
     "safety_unavailable": ("Error", "Safety check failed; message not sent"),
+    "memory_summarized": ("Memory", "Session note saved"),
+    "memory_summary_skipped": ("Memory", "Session note not saved"),
+    "memory_cleared": ("Memory", "User cleared memory notes"),
+    "memory_setting_changed": ("Memory", "User changed the memory setting"),
+    "history_cleared": ("Session", "User deleted all conversations"),
+    "history_exported": ("Session", "User downloaded their history"),
 }
 _STATUS = {"info": "OK", "warning": "Warning", "error": "Error"}
 

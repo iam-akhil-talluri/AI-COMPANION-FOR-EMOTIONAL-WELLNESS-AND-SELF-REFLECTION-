@@ -20,6 +20,8 @@ class SessionSummary(BaseModel):
     created_at: datetime
     last_active: datetime
     message_count: int
+    # The session's safety-checked memory note, used as the History preview (null until written).
+    summary: str | None = None
 
 
 class MessageOut(BaseModel):
@@ -33,6 +35,14 @@ class MessageOut(BaseModel):
 
 class SessionDetail(SessionSummary):
     messages: list[MessageOut]
+
+
+class HistoryExport(BaseModel):
+    """Everything in the user's History, for download."""
+
+    exported_at: datetime
+    username: str
+    sessions: list[SessionDetail]
 
 
 class MessageCreate(BaseModel):

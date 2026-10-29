@@ -32,6 +32,18 @@ class Settings(BaseSettings):
     # Number of recent messages passed to the reply provider.
     context_messages: int = Field(default=8, ge=1, validation_alias="CONTEXT_MESSAGES")
 
+    # Cross-session memory: a short, safety-checked note per session (app/services/memory_service.py).
+    memory_enabled: bool = Field(default=True, validation_alias="MEMORY_ENABLED")
+    # Notes from the user's other sessions sent with each reply.
+    memory_sessions: int = Field(default=3, ge=1, le=10, validation_alias="MEMORY_SESSIONS")
+    # Sessions with fewer messages are not summarized.
+    memory_min_messages: int = Field(default=4, ge=2, validation_alias="MEMORY_MIN_MESSAGES")
+    # A session is summarized once it has been quiet this long.
+    memory_idle_minutes: float = Field(default=20, ge=0, validation_alias="MEMORY_IDLE_MINUTES")
+    # How often the background job looks for sessions to summarize (0 turns the job off).
+    memory_interval_minutes: float = Field(default=10, ge=0, validation_alias="MEMORY_INTERVAL_MINUTES")
+    memory_summary_max_tokens: int = Field(default=120, ge=16, validation_alias="MEMORY_SUMMARY_MAX_TOKENS")
+
     # Conversational AI (OpenAI). Without a key, low-risk messages get 503 reply_unavailable;
     # escalated messages still get the reviewed support response.
     openai_api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")

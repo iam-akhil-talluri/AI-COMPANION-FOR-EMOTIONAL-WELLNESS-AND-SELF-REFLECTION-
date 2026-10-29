@@ -33,7 +33,8 @@ _NOT_ADMIN = "Administrator sign-in was not successful"
 
 def _auth_response(user: User) -> AuthResponse:
     token, expires_in = create_access_token(user.id, user.role, user.token_version)
-    return AuthResponse(token=token, expires_in=expires_in, user=UserOut(username=user.username, role=user.role))
+    return AuthResponse(token=token, expires_in=expires_in, user=UserOut(
+        username=user.username, role=user.role, memory_enabled=user.memory_enabled))
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED,
@@ -80,7 +81,7 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)) -
 
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(current_user)) -> UserOut:
-    return UserOut(username=user.username, role=user.role)
+    return UserOut(username=user.username, role=user.role, memory_enabled=user.memory_enabled)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

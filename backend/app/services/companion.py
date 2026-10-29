@@ -116,6 +116,8 @@ def companion_reply(context: Sequence[dict], message: str, info: ReplyContext,
         opening_prompt=_opening_prompt(context, info),
         categories=safety.categories if RISK_ORDER[risk] >= RISK_ORDER["moderate"] else (),
         prior_risk=info.prior_risk,
+        recent_risk_elsewhere=info.recent_risk_elsewhere,
+        memory=info.memory,
     )
     try:
         result = ai_service.generate(messages, settings)

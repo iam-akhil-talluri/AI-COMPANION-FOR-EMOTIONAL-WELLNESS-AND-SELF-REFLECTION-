@@ -42,7 +42,9 @@ def admin_analytics(db: Session, period_days: int = 7, settings: Settings | None
     per_day = Counter(moment.date() for moment in created)
 
     # --- Safety --------------------------------------------------------------------
-    interactions = list(db.scalars(select(Interaction).where(Interaction.created_at >= since)))
+    # Memory notes (purpose "summary") count toward AI cost only, not toward chat or safety figures.
+    all_interactions = list(db.scalars(select(Interaction).where(Interaction.created_at >= since)))
+    interactions = [i for i in all_interactions if i.purpose == "chat"]
     events = list(db.scalars(select(SafetyEvent).where(SafetyEvent.created_at >= since)))
     checked = [i for i in interactions if i.safety_checked]
     errors = sum(1 for i in interactions if i.status == "safety_error")
@@ -51,7 +53,8 @@ def admin_analytics(db: Session, period_days: int = 7, settings: Settings | None
     by_category = Counter(e.category for e in events if e.stage == "input")
 
     # --- AI usage --------------------------------------------------------------------
-    ai = [i for i in interactions if i.used_ai]
+    ai = [i for i in all_interactions if i.used_ai]
+    summaries = [i for i in ai if i.purpose == "summary"]
     input_tokens = sum(i.prompt_tokens for i in ai)
     output_tokens = sum(i.completion_tokens for i in ai)
     cost = sum(i.estimated_cost_usd for i in ai)
@@ -81,7 +84,7 @@ def admin_analytics(db: Session, period_days: int = 7, settings: Settings | None
         "safety": {
             "messages_checked": len(checked),
             "safety_check_errors": errors,
-            "sent_to_ai_unchecked": sum(1 for i in ai if not i.safety_checked),
+            "sent_to_ai_unchecked": sum(1 for i in interactions if i.used_ai and not i.safety_checked),
             "decisions": {
                 "clear": sum(1 for i in checked if i.risk_level in ("low", "moderate")),
                 "concern": sum(1 for i in checked if i.risk_level in ("elevated", "high")),
@@ -103,6 +106,8 @@ def admin_analytics(db: Session, period_days: int = 7, settings: Settings | None
             "avg_cost_per_request_usd": round(cost / len(ai), 6) if ai else 0,
             "avg_latency_ms": round(sum(i.latency_ms for i in ai) / len(ai)) if ai else 0,
             "replies_without_ai": sum(1 for i in checked if not i.used_ai),
+            "memory_summaries": len(summaries),
+            "memory_cost_usd": round(sum(i.estimated_cost_usd for i in summaries), 6),
             "month_to_date_cost_usd": round(month_cost, 6),
             "monthly_budget_usd": budget,
             "budget_utilization_pct": round(month_cost / budget * 100, 1) if budget else None,

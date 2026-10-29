@@ -19,7 +19,7 @@ def test_register_returns_token_and_user(client, db_session):
     assert response.status_code == 201
     body = response.json()
     assert body["token_type"] == "bearer" and body["token"] and body["expires_in"] == 480 * 60
-    assert body["user"] == {"username": "Quiet.Harbor", "role": "user"}
+    assert body["user"] == {"username": "Quiet.Harbor", "role": "user", "memory_enabled": True}
     user = db_session.scalar(select(User))
     assert user.username_key == "quiet.harbor"
     assert user.password_hash.startswith("$argon2id$") and PASSWORD not in user.password_hash
@@ -69,7 +69,7 @@ def test_login_success(client):
     register(client, "calm-river")
     response = login(client, "Calm-River")
     assert response.status_code == 200
-    assert response.json()["user"] == {"username": "calm-river", "role": "user"}
+    assert response.json()["user"] == {"username": "calm-river", "role": "user", "memory_enabled": True}
 
 
 @pytest.mark.parametrize("username,password", [("calm-river", "wrong-password"), ("nobody-here", PASSWORD)])
@@ -118,7 +118,7 @@ def test_failed_sign_in_is_logged_without_the_username(client, db_session):
 
 
 def test_me_returns_the_signed_in_user(client, auth):
-    assert client.get("/api/auth/me", headers=auth).json() == {"username": "calm-river", "role": "user"}
+    assert client.get("/api/auth/me", headers=auth).json() == {"username": "calm-river", "role": "user", "memory_enabled": True}
 
 
 def test_protected_routes_require_a_token(client):

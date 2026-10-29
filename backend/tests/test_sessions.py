@@ -254,3 +254,103 @@ def test_retention_job_uses_its_own_session(session_factory, client, auth):
     from app.services.retention import _purge_once
 
     _purge_once(30)  # nothing to purge, must not raise
+
+
+# --- History: filter, search, paging, export and delete all -----------------------------
+
+def history(client, headers, query: str = "") -> tuple[list[dict], int]:
+    response = client.get(f"/api/sessions{query}", headers=headers)
+    assert response.status_code == 200, response.text
+    return response.json(), int(response.headers["X-Total-Count"])
+
+
+def test_history_filters_by_type(client, auth, fake_replies):
+    conversation = new_session(client, auth)
+    reflection = new_session(client, auth, type="reflection", prompt="What felt hard today?")
+    send(client, auth, conversation, "Work was busy")
+    send(client, auth, reflection, "Sleep, mostly")
+    sessions, total = history(client, auth, "?type=reflection")
+    assert [s["id"] for s in sessions] == [reflection] and total == 1
+    assert history(client, auth)[1] == 2
+    assert client.get("/api/sessions?type=journal", headers=auth).status_code == 422
+
+
+def test_history_search_matches_titles_and_own_messages_only(client, auth, fake_replies):
+    exams = new_session(client, auth)
+    send(client, auth, exams, "Exams are stressing me out")
+    send(client, auth, exams, "Especially the chemistry final")
+    send(client, auth, new_session(client, auth), "Work was busy")
+    other = register(client, "other-user")
+    send(client, other, new_session(client, other), "My chemistry exam went fine")
+
+    assert [s["id"] for s in history(client, auth, "?q=CHEMISTRY")[0]] == [exams]  # message text, any case
+    assert [s["id"] for s in history(client, auth, "?q=exams are")[0]] == [exams]  # title
+    assert history(client, auth, "?q=gardening") == ([], 0)
+
+
+def test_history_search_treats_wildcards_literally(client, auth, fake_replies):
+    send(client, auth, new_session(client, auth), "Hello there")
+    assert history(client, auth, "?q=%25")[1] == 0
+    assert history(client, auth, "?q=_")[1] == 0
+    assert client.get("/api/sessions?q=" + "a" * 101, headers=auth).status_code == 422
+
+
+def test_history_paging_reports_the_total(client, auth, fake_replies):
+    ids = []
+    for index in range(5):
+        session_id = new_session(client, auth)
+        send(client, auth, session_id, f"Message {index}")
+        ids.append(session_id)
+    page_one, total = history(client, auth, "?limit=2")
+    page_three, _ = history(client, auth, "?limit=2&offset=4")
+    assert total == 5 and [s["id"] for s in page_one] == ids[:-3:-1] and [s["id"] for s in page_three] == [ids[0]]
+
+
+def test_total_count_header_is_readable_by_the_frontend(client, auth):
+    response = client.get("/api/sessions", headers={**auth, "Origin": "http://localhost:5173"})
+    assert "X-Total-Count" in response.headers["Access-Control-Expose-Headers"]
+
+
+def test_export_contains_only_the_users_own_history(client, db_session, auth, fake_replies):
+    mine = new_session(client, auth)
+    send(client, auth, mine, "Exams are stressing me out")
+    new_session(client, auth)  # empty: not exported
+    other = register(client, "other-user")
+    send(client, other, new_session(client, other), "Not yours")
+
+    response = client.get("/api/sessions/export", headers=auth)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["username"] == "calm-river" and body["exported_at"].endswith("Z")
+    [session] = body["sessions"]
+    assert session["id"] == mine
+    assert [m["content"] for m in session["messages"]] == ["Exams are stressing me out", MOCK_REPLY]
+    assert "Not yours" not in response.text
+    log = db_session.scalar(select(EventLog).where(EventLog.event_type == "history_exported"))
+    assert log.detail == "sessions=1"
+
+
+def test_export_is_rate_limited(client, auth):
+    for _ in range(10):
+        assert client.get("/api/sessions/export", headers=auth).status_code == 200
+    response = client.get("/api/sessions/export", headers=auth)
+    assert response.status_code == 429 and response.json()["code"] == "rate_limited"
+
+
+def test_export_needs_sign_in(client):
+    assert client.get("/api/sessions/export").status_code == 401
+
+
+def test_delete_all_removes_only_the_users_sessions(client, db_session, auth, fake_replies):
+    for text in ("One", "Two"):
+        send(client, auth, new_session(client, auth), text)
+    other = register(client, "other-user")
+    theirs = new_session(client, other)
+    send(client, other, theirs, "Keep me")
+
+    assert client.delete("/api/sessions", headers=auth).status_code == 204
+    assert history(client, auth) == ([], 0)
+    assert [s["id"] for s in history(client, other)[0]] == [theirs]
+    remaining = {m.content for m in db_session.scalars(select(Message))}
+    assert remaining == {"Keep me", MOCK_REPLY}
+    assert db_session.scalar(select(EventLog).where(EventLog.event_type == "history_cleared")).detail == "sessions=2"

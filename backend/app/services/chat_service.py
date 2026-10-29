@@ -1,8 +1,10 @@
 """Message handling: validation, rate limiting, reply generation and persistence.
 
 Replies come from the registered reply provider (the companion: safety check, escalation,
-AI reply and output check). This module stores the messages and the anonymized safety and
-usage metrics, and maps provider failures to API errors. Nothing is stored without a reply.
+AI reply and output check). This module gathers what the provider gets (recent messages,
+memory notes from the user's other sessions, prior risk), stores the messages and the
+anonymized safety and usage metrics, and maps provider failures to API errors. Nothing is
+stored without a reply.
 """
 
 import logging
@@ -16,7 +18,7 @@ from app.config import Settings, get_settings
 from app.db.models import ConversationSession, Interaction, SafetyEvent
 from app.db.types import utc_now
 from app.errors import AppError
-from app.services import reply_provider
+from app.services import memory_service, reply_provider
 from app.services.conversation_service import (
     GENERIC_TITLES,
     add_message,
@@ -66,6 +68,17 @@ def had_prior_risk(db: Session, session_id: str) -> bool:
         SafetyEvent.session_id == session_id, SafetyEvent.stage == "input",
         SafetyEvent.risk_level.in_(("elevated", "high")), SafetyEvent.created_at >= utc_now() - PRIOR_RISK_WINDOW,
     ).limit(1)
+    return db.scalar(stmt) is not None
+
+
+def had_recent_risk_elsewhere(db: Session, user_id: int, session_id: str) -> bool:
+    """An escalated message in another of the user's sessions in the last 24 hours."""
+    stmt = (select(SafetyEvent.id)
+            .join(ConversationSession, ConversationSession.id == SafetyEvent.session_id)
+            .where(ConversationSession.user_id == user_id, SafetyEvent.session_id != session_id,
+                   SafetyEvent.stage == "input", SafetyEvent.risk_level.in_(("elevated", "high")),
+                   SafetyEvent.created_at >= utc_now() - PRIOR_RISK_WINDOW)
+            .limit(1))
     return db.scalar(stmt) is not None
 
 
@@ -123,12 +136,15 @@ def send_message(db: Session, conversation: ConversationSession, message: str,
     log_event(db, "chat_request", session_id)
 
     context = recent_context(db, session_id, settings.context_messages)
+    user = conversation.user
     info = ReplyContext(
         session_id=session_id,
         session_type=conversation.type,
         session_prompt=conversation.prompt,
         message_count=conversation.message_count or 0,
         prior_risk=had_prior_risk(db, session_id),
+        recent_risk_elsewhere=had_recent_risk_elsewhere(db, user.id, session_id),
+        memory=memory_service.memory_for_reply(db, user, session_id, settings),
         ai_budget_exhausted=budget_exhausted(db, settings),
     )
 
