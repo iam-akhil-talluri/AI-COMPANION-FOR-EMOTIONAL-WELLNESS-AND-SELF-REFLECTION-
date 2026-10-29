@@ -78,7 +78,8 @@ async function readJson(response) {
   }
 }
 
-export async function apiRequest(path, { method = 'GET', body, auth = true } = {}) {
+// withHeaders: resolve to { data, headers } instead of the body alone (e.g. X-Total-Count).
+export async function apiRequest(path, { method = 'GET', body, auth = true, withHeaders = false } = {}) {
   const headers = { Accept: 'application/json' }
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json'
@@ -107,7 +108,7 @@ export async function apiRequest(path, { method = 'GET', body, auth = true } = {
   }
 
   if (response.status === 204) {
-    return null
+    return withHeaders ? { data: null, headers: response.headers } : null
   }
 
   const data = await readJson(response)
@@ -133,5 +134,5 @@ export async function apiRequest(path, { method = 'GET', body, auth = true } = {
     throw new ApiError(response.status, code, message, data)
   }
 
-  return data
+  return withHeaders ? { data, headers: response.headers } : data
 }

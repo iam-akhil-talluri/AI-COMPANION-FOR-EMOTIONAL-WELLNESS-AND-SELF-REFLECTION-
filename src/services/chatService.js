@@ -43,7 +43,9 @@ function toUiSession(session) {
     lastActive: session.last_active,
     title: session.title || (session.type === 'reflection' ? 'Reflection' : 'Conversation'),
     prompt: session.prompt,
-    messageCount: session.message_count
+    messageCount: session.message_count,
+    // Safety-checked memory note, shown as the History preview (null until written).
+    summary: session.summary || null
   }
 }
 
@@ -55,9 +57,27 @@ export async function createSession({ type = 'conversation', prompt = null, titl
   return toUiSession(session)
 }
 
-export async function listSessions() {
-  const sessions = await apiRequest('/api/sessions?limit=100')
-  return sessions.map(toUiSession)
+// History page: newest activity first. type: 'conversation' | 'reflection' | null; q: search text.
+// Resolves to { sessions, total } where total counts every match, not just this page.
+export async function listSessions({ type = null, q = '', limit = 20, offset = 0 } = {}) {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+  if (type) params.set('type', type)
+  if (q.trim()) params.set('q', q.trim())
+
+  const { data, headers } = await apiRequest(`/api/sessions?${params}`, { withHeaders: true })
+  const sessions = data.map(toUiSession)
+  const total = Number(headers.get('X-Total-Count'))
+  return { sessions, total: Number.isFinite(total) && total >= offset ? total : offset + sessions.length }
+}
+
+// Every session with its messages, as the JSON the backend sends (for "Download my history").
+export async function exportHistory() {
+  return apiRequest('/api/sessions/export')
+}
+
+// Deletes every session, its messages and memory note.
+export async function deleteAllSessions() {
+  await apiRequest('/api/sessions', { method: 'DELETE' })
 }
 
 export async function getSession(sessionId) {

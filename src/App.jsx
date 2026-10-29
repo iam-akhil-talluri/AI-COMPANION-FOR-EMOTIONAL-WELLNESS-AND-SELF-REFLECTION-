@@ -67,11 +67,14 @@ import { register, restoreSession, signIn, signOut } from './services/authServic
 import {
   MAX_MESSAGE_LENGTH,
   createSession,
+  deleteAllSessions,
   deleteSession,
+  exportHistory,
   getSession,
   listSessions,
   sendMessageToBackend
 } from './services/chatService'
+import { forgetAllNotes, forgetNote, getMemory, setMemoryEnabled } from './services/memoryService'
 import {
   formatLogTime,
   formatNumber,
@@ -85,6 +88,51 @@ const CONVERSATION_STARTER = 'What would you like to talk about today?'
 
 // Screens that send messages; the support and safety-error screens return to them.
 const CHAT_SCREENS = ['conversation', 'reflection-chat', 'continue-session']
+
+// History shows this many sessions at a time ("Show more" loads the next page).
+const HISTORY_PAGE_SIZE = 20
+const HISTORY_FILTERS = [
+  { value: '', label: 'All' },
+  { value: 'conversation', label: 'Conversations' },
+  { value: 'reflection', label: 'Reflections' }
+]
+
+// History groups sessions by their last activity: Today, Past 7 days, Earlier.
+function historyGroup(isoDate) {
+  const day = new Date(isoDate)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  if (day >= today) return 'Today'
+  const weekStart = new Date(today)
+  weekStart.setDate(today.getDate() - 6)
+  return day >= weekStart ? 'Past 7 days' : 'Earlier'
+}
+
+function groupSessions(sessions) {
+  const groups = []
+  for (const session of sessions) {
+    const label = historyGroup(session.lastActive)
+    const last = groups[groups.length - 1]
+    if (last && last.label === label) {
+      last.sessions.push(session)
+    } else {
+      groups.push({ label, sessions: [session] })
+    }
+  }
+  return groups
+}
+
+// Saves the export as a JSON file in the browser's downloads.
+function downloadJson(data, filename) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
 
 // One message bubble. role: user | assistant | notice (a system message, e.g. "no reply available").
 // item.resources: reviewed support resources sent by the backend with a `support` or `crisis` reply.
@@ -233,6 +281,20 @@ function App() {
   const [openingSessionId, setOpeningSessionId] = useState(null)
   const [deletingSessionId, setDeletingSessionId] = useState(null)
   const [historyError, setHistoryError] = useState('')
+  // History filters: type tab, the search box text, and the search sent to the backend (after a pause).
+  const [historyType, setHistoryType] = useState('')
+  const [historyQuery, setHistoryQuery] = useState('')
+  const [historySearch, setHistorySearch] = useState('')
+  // Number of sessions matching the filters (the list may show only the first pages).
+  const [historyTotal, setHistoryTotal] = useState(0)
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false)
+  // 'export' | 'delete-all' while that History action runs
+  const [historyAction, setHistoryAction] = useState(null)
+  // Cross-session memory: { enabled, available, sessionsUsed, notes } from GET /api/memory
+  const [memory, setMemory] = useState(null)
+  const [memoryError, setMemoryError] = useState('')
+  // 'toggle' | 'forget-all' | a session id while that memory action runs
+  const [memoryBusy, setMemoryBusy] = useState(null)
   const screenLoading = ['history', 'analytics', 'admin'].includes(currentScreen) && loadedScreen.screen !== currentScreen
   const screenLoadError = loadedScreen.screen === currentScreen ? loadedScreen.error : ''
 
@@ -261,6 +323,14 @@ function App() {
     setLoadedScreen({ screen: null, error: '' })
     setScreenNotice('')
     setHistoryError('')
+    setHistoryType('')
+    setHistoryQuery('')
+    setHistorySearch('')
+    setHistoryTotal(0)
+    setHistoryAction(null)
+    setMemory(null)
+    setMemoryError('')
+    setMemoryBusy(null)
     setUserRole(null)
     setCurrentUser(null)
     setAdminLogin(false)
@@ -309,12 +379,24 @@ function App() {
     continueSafetyChecking])
 
 
+  // HISTORY SEARCH: the search is sent once typing pauses.
+  useEffect(() => {
+    const timer = setTimeout(() => setHistorySearch(historyQuery.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [historyQuery])
+
   // SCREEN DATA
   // History and the Admin Dashboard load fresh data each time they open.
+  // History also reloads its first page when the type tab or the search changes.
   useEffect(() => {
     const loaders = {
-      analytics: async () => setConversationSessions(await listSessions()),
-      history: async () => setConversationSessions(await listSessions()),
+      // My Insights counts every session (the backend allows up to 200 per request).
+      analytics: async () => setConversationSessions((await listSessions({ limit: 200 })).sessions),
+      history: async () => {
+        const page = await listSessions({ type: historyType, q: historySearch, limit: HISTORY_PAGE_SIZE })
+        setConversationSessions(page.sessions)
+        setHistoryTotal(page.total)
+      },
       admin: async () => {
         const [logs, health, analytics] = await Promise.all([
           getRecentLogs(10),
@@ -367,7 +449,164 @@ function App() {
     return () => {
       cancelled = true
     }
+  }, [currentScreen, historyType, historySearch])
+
+  // MEMORY: what the companion remembers, shown on the History screen.
+  // Loaded separately so History still works if this request fails.
+  useEffect(() => {
+    if (currentScreen !== 'history') return
+
+    let cancelled = false
+    getMemory()
+      .then((data) => {
+        if (cancelled) return
+        setMemory(data)
+        setMemoryError('')
+      })
+      .catch((error) => {
+        if (cancelled) return
+        console.error('Unable to load memory notes:', error)
+        setMemory(null)
+        setMemoryError('We could not load what the companion remembers. Check your connection and try again.')
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [currentScreen])
+
+  // HISTORY: the next page of sessions for the current filters
+  async function loadMoreSessions() {
+    if (historyLoadingMore) return
+
+    setHistoryLoadingMore(true)
+    setHistoryError('')
+    try {
+      const page = await listSessions({
+        type: historyType,
+        q: historySearch,
+        limit: HISTORY_PAGE_SIZE,
+        offset: conversationSessions.length
+      })
+      setConversationSessions((current) => {
+        const shown = new Set(current.map((session) => session.id))
+        return [...current, ...page.sessions.filter((session) => !shown.has(session.id))]
+      })
+      setHistoryTotal(page.total)
+    } catch (error) {
+      console.error('Unable to load more conversations:', error)
+      setHistoryError('We could not load more conversations. Check your connection and try again.')
+    } finally {
+      setHistoryLoadingMore(false)
+    }
+  }
+
+  // HISTORY: download every conversation and its messages as a JSON file
+  async function downloadHistory() {
+    if (historyAction) return
+
+    setHistoryAction('export')
+    setHistoryError('')
+    try {
+      const data = await exportHistory()
+      downloadJson(data, `wellness-companion-history-${new Date().toISOString().slice(0, 10)}.json`)
+    } catch (error) {
+      console.error('Unable to download history:', error)
+      setHistoryError(error.status === 429
+        ? error.message
+        : 'We could not download your history. Check your connection and try again.')
+    } finally {
+      setHistoryAction(null)
+    }
+  }
+
+  // HISTORY: delete every conversation, its messages and memory note (DELETE /api/sessions)
+  async function removeAllSessions() {
+    if (historyAction || openingSessionId || deletingSessionId) return
+    if (!window.confirm('Delete all of your conversations and reflections? This removes them permanently, '
+      + 'along with everything the companion remembers.')) return
+
+    setHistoryAction('delete-all')
+    setHistoryError('')
+    try {
+      await deleteAllSessions()
+      setConversationSessions([])
+      setHistoryTotal(0)
+      setMemory((current) => (current ? { ...current, notes: [] } : current))
+      setActiveConversationId(null)
+      setMessages([])
+    } catch (error) {
+      console.error('Unable to delete all conversations:', error)
+      setHistoryError('We could not delete your conversations. Check your connection and try again.')
+    } finally {
+      setHistoryAction(null)
+    }
+  }
+
+  // MEMORY: turn remembering on or off. Turning it off deletes every note.
+  async function toggleMemory() {
+    if (!memory || memoryBusy) return
+    const enable = !memory.enabled
+    if (!enable && memory.notes.length > 0 && !window.confirm(
+      'Turn off memory? The companion will stop using your past conversations, and everything it remembers '
+      + 'will be deleted. Your conversations stay in History.')) return
+
+    setMemoryBusy('toggle')
+    setMemoryError('')
+    try {
+      setMemory(await setMemoryEnabled(enable))
+      if (!enable) {
+        setConversationSessions((current) => current.map((session) => ({ ...session, summary: null })))
+      }
+    } catch (error) {
+      console.error('Unable to change the memory setting:', error)
+      setMemoryError('We could not change this setting. Check your connection and try again.')
+    } finally {
+      setMemoryBusy(null)
+    }
+  }
+
+  // MEMORY: forget one note (the conversation stays in History)
+  async function forgetMemoryNote(note) {
+    if (memoryBusy) return
+
+    setMemoryBusy(note.sessionId)
+    setMemoryError('')
+    try {
+      await forgetNote(note.sessionId)
+      setMemory((current) => ({
+        ...current,
+        notes: current.notes.filter((item) => item.sessionId !== note.sessionId)
+      }))
+      setConversationSessions((current) => current.map((session) => (
+        session.id === note.sessionId ? { ...session, summary: null } : session
+      )))
+    } catch (error) {
+      console.error('Unable to forget memory note:', error)
+      setMemoryError('We could not forget this note. Check your connection and try again.')
+    } finally {
+      setMemoryBusy(null)
+    }
+  }
+
+  // MEMORY: forget every note (conversations stay in History)
+  async function forgetAllMemory() {
+    if (memoryBusy) return
+    if (!window.confirm('Forget everything the companion remembers? Your conversations stay in History.')) return
+
+    setMemoryBusy('forget-all')
+    setMemoryError('')
+    try {
+      await forgetAllNotes()
+      setMemory((current) => ({ ...current, notes: [] }))
+      setConversationSessions((current) => current.map((session) => ({ ...session, summary: null })))
+    } catch (error) {
+      console.error('Unable to forget memory notes:', error)
+      setMemoryError('We could not forget these notes. Check your connection and try again.')
+    } finally {
+      setMemoryBusy(null)
+    }
+  }
 
 
 
@@ -579,6 +818,11 @@ function App() {
     try {
       await deleteSession(session.id)
       setConversationSessions((current) => current.filter((item) => item.id !== session.id))
+      setHistoryTotal((total) => Math.max(0, total - 1))
+      // Its memory note is deleted with it.
+      setMemory((current) => (current
+        ? { ...current, notes: current.notes.filter((note) => note.sessionId !== session.id) }
+        : current))
       if (activeConversationId === session.id) {
         setActiveConversationId(null)
         setMessages([])
@@ -1543,8 +1787,13 @@ function App() {
   }
 
   // CONVERSATION HISTORY SCREEN
-  // GET /api/sessions returns only the signed-in user's sessions.
+  // GET /api/sessions returns only the signed-in user's sessions (filtered, searched, paged).
+  // GET /api/memory returns only the signed-in user's memory notes.
   if (currentScreen === 'history') {
+    const filtering = historyType !== '' || historySearch !== ''
+    const sessionBusy = openingSessionId !== null || deletingSessionId !== null || historyAction !== null
+    const hasMore = conversationSessions.length < historyTotal
+
     return (
       <div className='app'>
         {supportBar}
@@ -1554,11 +1803,45 @@ function App() {
             <button className='back-button'
               onClick={() => setCurrentScreen('home')}> Back to Home</button>
             <h1>Conversation History</h1>
-            <p>View and continue your previous session conversations</p>
+            <p>Search, continue or download your previous conversations and reflections</p>
           </header>
 
           <section className='history-card'>
-            <h2>Your Previous Conversations</h2>
+            <div className='history-card-heading'>
+              <h2>Your Previous Conversations</h2>
+              {!screenLoading && historyTotal > 0 && (
+                <span className='session-count'>
+                  {historyTotal} {historyTotal === 1 ? 'session' : 'sessions'}
+                </span>
+              )}
+            </div>
+
+            <div className='history-toolbar'>
+              <label className='history-search'>
+                <span className='visually-hidden'>Search your conversations</span>
+                <input
+                  type='search'
+                  value={historyQuery}
+                  maxLength={100}
+                  placeholder='Search your conversations'
+                  onChange={(event) => setHistoryQuery(event.target.value)}
+                />
+              </label>
+
+              <div className='history-filters' role='group' aria-label='Show'>
+                {HISTORY_FILTERS.map((filter) => (
+                  <button
+                    key={filter.value || 'all'}
+                    type='button'
+                    className={historyType === filter.value ? 'history-filter active' : 'history-filter'}
+                    aria-pressed={historyType === filter.value}
+                    onClick={() => setHistoryType(filter.value)}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {screenLoading && (
               <p className='status-text' role='status'>Loading your conversations...</p>
@@ -1570,48 +1853,182 @@ function App() {
 
             {!screenLoading && !screenLoadError && conversationSessions.length === 0 && (
               <p className='status-text'>
-                No conversations yet. Your conversations and reflections will appear here.
+                {filtering
+                  ? 'No conversations match. Try a different search or filter.'
+                  : 'No conversations yet. Your conversations and reflections will appear here.'}
               </p>
             )}
 
-            <div className='session-list'>
-              {conversationSessions.map((session) => (
-                <div key={session.id}
-                  className='session-item'>
-                  <div className='session-information'>
-                    <span className='session-date'>{session.date}</span>
+            {groupSessions(conversationSessions).map((group) => (
+              <div key={group.label} className='session-group'>
+                <h3 className='session-group-label'>{group.label}</h3>
 
-                    <h3>{session.title}</h3>
-                    <span className='session-count'>
-                      {session.messageCount} {session.messageCount === 1 ? 'message' : 'messages'}
-                    </span>
+                <div className='session-list'>
+                  {group.sessions.map((session) => (
+                    <div key={session.id}
+                      className='session-item'>
+                      <div className='session-information'>
+                        <span className='session-date'>
+                          {session.date}
+                          <span className='session-type'>
+                            {session.type === 'reflection' ? 'Reflection' : 'Conversation'}
+                          </span>
+                        </span>
 
-                  </div>
+                        <h3>{session.title}</h3>
+                        {session.summary && <p className='session-summary'>{session.summary}</p>}
+                        <span className='session-count'>
+                          {session.messageCount} {session.messageCount === 1 ? 'message' : 'messages'}
+                        </span>
 
-                  <div className='session-actions'>
-                    <button
-                      className='session-button'
-                      type='button'
-                      disabled={openingSessionId !== null || deletingSessionId !== null}
-                      onClick={() => openSession(session)}
-                    >
-                      {openingSessionId === session.id ? 'Opening...' : 'Continue'}
-                    </button>
+                      </div>
 
-                    <button
-                      className='session-delete-button'
-                      type='button'
-                      aria-label={`Delete ${session.title}`}
-                      disabled={openingSessionId !== null || deletingSessionId !== null}
-                      onClick={() => removeSession(session)}
-                    >
-                      {deletingSessionId === session.id ? 'Deleting...' : 'Delete'}
-                    </button>
-                  </div>
+                      <div className='session-actions'>
+                        <button
+                          className='session-button'
+                          type='button'
+                          disabled={sessionBusy}
+                          onClick={() => openSession(session)}
+                        >
+                          {openingSessionId === session.id ? 'Opening...' : 'Continue'}
+                        </button>
 
+                        <button
+                          className='session-delete-button'
+                          type='button'
+                          aria-label={`Delete ${session.title}`}
+                          disabled={sessionBusy}
+                          onClick={() => removeSession(session)}
+                        >
+                          {deletingSessionId === session.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </div>
+
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+            ))}
+
+            {!screenLoading && hasMore && (
+              <button
+                className='history-more-button'
+                type='button'
+                disabled={historyLoadingMore}
+                onClick={loadMoreSessions}
+              >
+                {historyLoadingMore ? 'Loading...' : 'Show more'}
+              </button>
+            )}
+
+            {!screenLoading && !screenLoadError && (historyTotal > 0 || filtering) && (
+              <div className='history-footer'>
+                <button
+                  className='session-delete-button'
+                  type='button'
+                  disabled={sessionBusy}
+                  onClick={downloadHistory}
+                >
+                  {historyAction === 'export' ? 'Preparing...' : 'Download my history'}
+                </button>
+                <button
+                  className='session-delete-button danger'
+                  type='button'
+                  disabled={sessionBusy}
+                  onClick={removeAllSessions}
+                >
+                  {historyAction === 'delete-all' ? 'Deleting...' : 'Delete all'}
+                </button>
+              </div>
+            )}
+          </section>
+
+          <section className='history-card memory-card' aria-labelledby='memory-heading'>
+            <div className='history-card-heading'>
+              <h2 id='memory-heading'>What the Companion Remembers</h2>
             </div>
+            <p className='memory-intro'>
+              When a conversation ends, the companion keeps a short note about it, so a new conversation can
+              pick up where you left off. Notes are checked for safety, and conversations about a crisis are
+              never remembered.
+            </p>
+
+            {memoryError && <p className='login-error' role='alert'>{memoryError}</p>}
+
+            {!memory && !memoryError && (
+              <p className='status-text' role='status'>Loading...</p>
+            )}
+
+            {memory && !memory.available && (
+              <p className='status-text'>Memory is not available right now.</p>
+            )}
+
+            {memory && memory.available && (
+              <>
+                <label className='memory-toggle'>
+                  <input
+                    type='checkbox'
+                    role='switch'
+                    checked={memory.enabled}
+                    disabled={memoryBusy !== null}
+                    onChange={toggleMemory}
+                  />
+                  <span>Remember my past conversations</span>
+                </label>
+
+                {memory.enabled && memory.notes.length === 0 && (
+                  <p className='status-text'>
+                    Nothing yet. Notes appear here after a conversation of a few messages ends.
+                  </p>
+                )}
+
+                {!memory.enabled && (
+                  <p className='status-text'>
+                    Memory is off. Each conversation starts fresh, and nothing is remembered between them.
+                  </p>
+                )}
+
+                {memory.notes.length > 0 && (
+                  <>
+                    <ul className='memory-list'>
+                      {memory.notes.map((note, index) => (
+                        <li key={note.sessionId} className='memory-note'>
+                          <div>
+                            <span className='session-date'>
+                              {note.date} · {note.title}
+                              {index < memory.sessionsUsed && (
+                                <span className='session-type'>Used in new conversations</span>
+                              )}
+                            </span>
+                            <p>{note.summary}</p>
+                          </div>
+                          <button
+                            className='session-delete-button'
+                            type='button'
+                            aria-label={`Forget the note about ${note.title}`}
+                            disabled={memoryBusy !== null}
+                            onClick={() => forgetMemoryNote(note)}
+                          >
+                            {memoryBusy === note.sessionId ? 'Forgetting...' : 'Forget'}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <div className='history-footer'>
+                      <button
+                        className='session-delete-button danger'
+                        type='button'
+                        disabled={memoryBusy !== null}
+                        onClick={forgetAllMemory}
+                      >
+                        {memoryBusy === 'forget-all' ? 'Forgetting...' : 'Forget everything'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
           </section>
         </main>
       </div>
