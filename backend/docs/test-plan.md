@@ -104,6 +104,11 @@ From: Akhil (backend, database, repository setup, sessions and conversation memo
 | SM-01 | `STORE_TRANSCRIPTS=false` | Reply returned, no message text stored, count still +2 |
 | SM-02 | Retention purge at startup for a session older than `RETENTION_DAYS` | Messages deleted, session hidden from list, `retention_purge` logged |
 | SM-03 | Recent sessions untouched by the purge | Still listed with messages |
+| SM-04 | Start a new session after a 4+ message session | Note written for the earlier session; `memory_summarized` logged without text |
+| SM-05 | Reply in another session | The note is sent in one delimited system message; never the session's own note |
+| SM-06 | Session with a high-risk message, a note failing a safety check, "NONE" | No note stored |
+| SM-07 | Memory off / Forget one / Forget everything / delete session / retention purge | Notes removed and no longer sent |
+| SM-08 | History: type filter, search (own messages only), paging with `X-Total-Count`, export, delete all | Correct, never another user's data |
 
 ### 4.5 Logging (LG)
 
@@ -166,6 +171,10 @@ From: Akhil (backend, database, repository setup, sessions and conversation memo
 | FE-19 | Input limits: 2,000 characters on chat inputs; username/password limits | `maxLength` present |
 | FE-20 | Browser console during the run | No application errors (expected HTTP error logs only) |
 | FE-21 | Phone-width layout of changed screens (Login, History) | No overlap, buttons usable |
+| FE-22 | Chat 4 messages, start a new conversation, send | Reply uses the earlier conversation's note; History shows the note as a preview |
+| FE-23 | History search, type tabs, empty-match message | Correct results and counts |
+| FE-24 | Memory panel: switch off and on, Forget, Forget everything | Server setting and notes match the screen |
+| FE-25 | Download my history; Delete all (with confirmation) | JSON with own sessions only; History and notes empty |
 
 ### 4.10 Other members' areas, limited (OT)
 

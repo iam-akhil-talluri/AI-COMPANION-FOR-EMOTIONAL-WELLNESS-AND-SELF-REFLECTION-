@@ -95,6 +95,15 @@ Backend code was **not** changed for this work.
 - **Continue** loads the saved messages from the server (the button shows "Opening...").
 - **New: Delete** removes the session after a confirmation. It uses the existing `DELETE /api/sessions/{id}`.
 - "1 message" / "2 messages" now uses the correct singular or plural.
+- **Search** (titles and message text, sent after typing pauses) and **All / Conversations / Reflections** tabs
+  (`GET /api/sessions?type=&q=`).
+- Sessions are grouped as **Today / Past 7 days / Earlier**, with a type badge and the session's memory note as a
+  preview. **Show more** loads the next 20 (`X-Total-Count` gives the total).
+- **Download my history** saves every session and message as JSON (`GET /api/sessions/export`); **Delete all**
+  removes everything after a confirmation (`DELETE /api/sessions`).
+- **What the Companion Remembers** (`GET /api/memory`): a "Remember my past conversations" switch (on by default;
+  turning it off deletes every note), the notes with **Forget** each, and **Forget everything**. Conversations
+  stay in History when notes are forgotten.
 
 ### Continue Session
 - Shows the messages loaded from the server. New messages go through `deliverMessage()`.

@@ -12,6 +12,8 @@ IT 7993 Capstone, Fall 2026. Sponsor: Capgemini America, Inc. Team P05-01.
 - **Pseudonymous accounts**: username + password only (Argon2id hashes, JWT sign-in). No email, real name or other personal information. Roles `user` and `admin`; the login screen's "Sign in as Administrator" checkbox is enforced by the server.
 - **Conversation and reflection sessions**: create, list (own sessions only), open, delete, and send messages.
 - **Conversation memory**: messages are stored per session; the last `CONTEXT_MESSAGES` messages are passed to the reply provider with each new message. A retention job removes old text after `RETENTION_DAYS`.
+- **Cross-session memory**: a short, safety-checked note per finished session; the newest notes from a user's other sessions go with each reply. On by default; users can turn it off and view or forget notes (`/api/memory`). Crisis sessions are never remembered.
+- **History**: filter by type, search titles and message text, paging (`X-Total-Count`), export as JSON (`GET /api/sessions/export`) and delete all (`DELETE /api/sessions`).
 - **Operational logging**: what happened (event type, level), never what anyone wrote. Admins read it at `GET /api/admin/logs`.
 - Rate limits, length limits, one error format, security headers, request IDs, Alembic migrations, health check, Docker image.
 
@@ -95,8 +97,8 @@ backend/
     config.py          every setting (environment variables / .env)
     errors.py          one error shape: {"code", "detail"}
     middleware.py      unexpected-error guard, request size limit, request IDs, security headers
-    api/               routes: auth, sessions (+ messages), logs (admin), health
-    services/          conversation_service, chat_service, reply_provider, user_service, security,
+    api/               routes: auth, sessions (+ messages, export), memory, logs (admin), health
+    services/          conversation_service, chat_service, memory_service, reply_provider, user_service, security,
                        rate_limiter, event_log, retention, health_service
     db/                SQLAlchemy models, UTC datetime type, engine/session
     schemas/           request and response models (the API contract)

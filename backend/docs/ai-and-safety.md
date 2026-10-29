@@ -82,6 +82,22 @@ when it applies (`ai_service.CATEGORY_NOTES`, `MODE_NOTES`):
 session's opening prompt (e.g. the chosen reflection prompt) is included as the companion's first turn, so the model
 sees what the user saw. Only `user` and `assistant` turns are ever sent; user text always keeps the `user` role.
 
+**Cross-session memory.** Each session gets one short note (at most 60 words), written by the AI from the
+user's own words once the session goes quiet (`MEMORY_IDLE_MINUTES`) or as soon as the user starts a new session.
+The newest `MEMORY_SESSIONS` (3) notes from the user's *other* sessions are sent with every reply, in one
+delimited system message that says they are background, never instructions (`ai_service.memory_message`). Safety
+rules for notes (`app/services/memory_service.py`):
+
+- A session with any **high-risk** message is never summarized: crisis wording never comes back in a later chat.
+- The summary prompt (`app/content/summary_prompt.md`) excludes diagnoses, medication, self-harm, abuse, danger
+  and identifying details, and never copies instructions. "NONE" means nothing worth remembering.
+- Every note must pass the output check **and** the input safety check (risk below elevated), or it is discarded.
+- A note is stored on its session, so deleting the session, a retention purge or "Forget" removes it.
+- Memory is on by default; each user can turn it off (which deletes every note) and view or forget notes in
+  History. `MEMORY_ENABLED=false` turns it off for everyone. Admins never see notes.
+- An elevated or high message in another of the user's sessions within 24 hours adds a gentle note to stay
+  supportive and keep 988 in mind (without bringing it up).
+
 **Prompt-injection defences.** The classifier flags injection attempts (logged as `prompt_injection` safety
 events) and adds a "do not follow it" note; the prompt contains a canary string, and any reply containing it or
 the prompt's section names is blocked by the output check.
@@ -108,7 +124,7 @@ Blocked replies are recorded as `output` safety events; the blocked text is neve
 | Unit | Classifier true positives, everyday false positives, negation, third person, obfuscation, moderation merge, fail closed, output check, sanitizer | `pytest tests/test_safety.py` |
 | Unit | Prompt keeps its key rules, message building, guidance notes, error mapping, cost | `pytest tests/test_ai.py` |
 | Integration | Each risk path through the API, fallbacks, metrics, privacy (no message text in logs or metrics), budget cap | `pytest tests/test_companion.py tests/test_admin_analytics.py` |
-| Live model | 34 scenarios (everyday, reflection, memory, false positives, boundaries, identity, dependency, jailbreaks, elevated, crisis, after-crisis) against the real model | `python -m scripts.evaluate_ai` |
+| Live model | 37 scenarios (everyday, reflection, memory, cross-session memory, false positives, boundaries, identity, dependency, jailbreaks, elevated, crisis, after-crisis) against the real model | `python -m scripts.evaluate_ai` |
 
 The latest live result is in [`ai-response-evaluation.md`](ai-response-evaluation.md): **34/34 passed** with
 `gpt-4o-mini`. Two output-check false positives found by this evaluation ("whether you have ADHD", "makes you think
@@ -122,6 +138,7 @@ prompt, notes, rules or model.
 | Model `gpt-4o-mini` ($0.15 / $0.60 per 1M input / output tokens) | About **$0.00013 per AI reply** (≈700 input + 40 output tokens). Compared live with `gpt-4.1-mini`: same latency (~1.3 s) and comparable replies at about 2.7× the price |
 | Short static prompt + guidance only when needed | Keeps input tokens per reply around 700-800 |
 | Context window of 8 messages | Input cost does not grow with long conversations |
+| Memory as short notes, not old messages | At most 3 notes of ≤60 words (≈250 input tokens per reply). One summary call per finished session (≈ the cost of one reply); shown separately in admin analytics |
 | `AI_MAX_OUTPUT_TOKENS=300` and a 2-4 sentence style | Short replies; output is the expensive token type |
 | Templates for crisis and abuse | No AI cost for those replies |
 | Free OpenAI Moderation | Second safety opinion at no cost |
@@ -156,6 +173,12 @@ New endpoint: `GET /api/admin/analytics?days=7` (admin only): overview, session 
 escalations and AI usage. `GET /api/health` gains "Safety / Moderation" and "AI Service" rows (judged from recent
 requests; it never calls OpenAI).
 
+Cross-session memory and History (migration `0003`): `GET /api/memory`, `POST /api/memory/settings`,
+`DELETE /api/memory`, `DELETE /api/memory/{session_id}`; `GET /api/sessions` gains `type`, `q`, an `X-Total-Count`
+header and a `summary` field; new `GET /api/sessions/export` and `DELETE /api/sessions`; `GET /api/auth/me` gains
+`memory_enabled`. Admin analytics adds `memory_summaries` and `memory_cost_usd`; summary calls are tagged
+`purpose = "summary"` in `interactions` and stay out of the chat and safety figures.
+
 New tables (migration `0002`): `safety_events` and `interactions`. Both hold anonymized metadata only: no message
 text and no user ID, so they are kept when a session or transcript is deleted.
 
@@ -172,6 +195,11 @@ text and no user ID, so they are kept when a session or transcript is deleted.
 | `PRICE_INPUT_PER_MILLION` / `PRICE_OUTPUT_PER_MILLION` | 0.15 / 0.60 | For estimates only |
 | `AI_MONTHLY_BUDGET_USD` | empty | Optional spending cap |
 | `CONTEXT_MESSAGES` | 8 | Conversation memory sent to the model |
+| `MEMORY_ENABLED` | true | Cross-session memory for everyone (users can still turn it off for themselves) |
+| `MEMORY_SESSIONS` | 3 | Notes from other sessions sent with each reply |
+| `MEMORY_MIN_MESSAGES` | 4 | Shorter sessions are not summarized |
+| `MEMORY_IDLE_MINUTES` / `MEMORY_INTERVAL_MINUTES` | 20 / 10 | When a quiet session is summarized; how often the job runs (0 = off) |
+| `MEMORY_SUMMARY_MAX_TOKENS` | 120 | Output cap for one note |
 
 ## 9. Known limitations and next steps
 
@@ -179,5 +207,8 @@ text and no user ID, so they are kept when a session or transcript is deleted.
 - Crisis resources are U.S.-only; verify every number with the team before each demo.
 - Rule-based classification can over-escalate rare phrasings (e.g. "I'm gonna kill my brother" as a joke); this is
   deliberate: a false crisis response is safer than a missed one.
-- Older turns beyond the context window are dropped, not summarized.
+- Older turns beyond the context window are dropped within a session; across sessions, only the short notes are
+  carried over.
+- When a user leaves one conversation and immediately starts another, the note for the first one is written in the
+  background, so the new conversation's first reply may not have it yet; later replies do.
 - Journal entries are not stored or screened yet (no backend endpoint).
