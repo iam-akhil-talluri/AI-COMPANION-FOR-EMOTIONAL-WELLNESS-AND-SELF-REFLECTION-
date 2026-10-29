@@ -3,7 +3,7 @@
     python -m scripts.evaluate_ai                      # writes docs/ai-response-evaluation.md
     python -m scripts.evaluate_ai --output report.md
 
-Needs OPENAI_API_KEY (calls the real model; about 38 requests, well under $0.01 with
+Needs OPENAI_API_KEY (calls the real model; about 39 requests, well under $0.01 with
 gpt-4o-mini). Nothing is stored in the database. Each scenario has automatic checks:
 the routing (status, risk level, whether the AI was called) and simple properties of the
 reply (output check, length, required or forbidden wording). Read the replies as well:
@@ -65,7 +65,13 @@ SCENARIOS = [
     Scenario("Cross-session memory", "Hi, I'm back.", "ok", "low", True,
              info=ReplyContext(memory=("They were nervous about their capstone demo on Friday and planned to "
                                        "rehearse twice.",)),
+             must_match=[r"(?i)capstone|demo|rehears"],
              must_not_match=[r"(?i)\b(my|the|these|your) notes\b", r"(?i)my (records|memory) (say|show)"]),
+    Scenario("Cross-session memory", "My roommate and I had a big argument last night.", "ok", "low", True,
+             info=ReplyContext(memory=("They were nervous about their capstone demo on Friday and planned to "
+                                       "rehearse twice.",)),
+             must_match=[r"(?i)roommate|argument|disagree|conflict"],
+             must_not_match=[r"(?i)capstone|demo|rehears"]),
     Scenario("Cross-session memory", "What do you remember about me?", "ok", "low", True,
              info=ReplyContext(memory=("They talked about feeling behind on their capstone.",)),
              must_not_match=[r"(?i)I remember everything", r"(?i)I'll always remember"]),

@@ -124,7 +124,7 @@ Blocked replies are recorded as `output` safety events; the blocked text is neve
 | Unit | Classifier true positives, everyday false positives, negation, third person, obfuscation, moderation merge, fail closed, output check, sanitizer | `pytest tests/test_safety.py` |
 | Unit | Prompt keeps its key rules, message building, guidance notes, error mapping, cost | `pytest tests/test_ai.py` |
 | Integration | Each risk path through the API, fallbacks, metrics, privacy (no message text in logs or metrics), budget cap | `pytest tests/test_companion.py tests/test_admin_analytics.py` |
-| Live model | 37 scenarios (everyday, reflection, memory, cross-session memory, false positives, boundaries, identity, dependency, jailbreaks, elevated, crisis, after-crisis) against the real model | `python -m scripts.evaluate_ai` |
+| Live model | 38 scenarios (everyday, reflection, memory, cross-session memory, false positives, boundaries, identity, dependency, jailbreaks, elevated, crisis, after-crisis) against the real model | `python -m scripts.evaluate_ai` |
 
 The latest live result is in [`ai-response-evaluation.md`](ai-response-evaluation.md): **34/34 passed** with
 `gpt-4o-mini`. Two output-check false positives found by this evaluation ("whether you have ADHD", "makes you think
