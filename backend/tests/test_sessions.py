@@ -2,13 +2,14 @@
 
 from datetime import timedelta
 
+import pytest
 from sqlalchemy import select, update
 
 from app.config import get_settings
 from app.db.models import ConversationSession, EventLog, Message, User
 from app.db.types import utc_now
 from app.services import reply_provider
-from app.services.conversation_service import touch_session
+from app.services.conversation_service import is_greeting, touch_session
 from app.services.retention import purge_expired
 from tests.helpers import MOCK_REPLY, new_session, register, send
 
@@ -69,7 +70,7 @@ def test_retention_removes_old_empty_sessions_only(client, db_session, auth, fak
     assert db_session.get(ConversationSession, new_empty) is not None  # may still be in use
     assert db_session.get(ConversationSession, old_used).message_count == 2  # within retention, untouched
     detail = db_session.scalar(select(EventLog.detail).where(EventLog.event_type == "retention_purge"))
-    assert detail == "rows=0 sessions=0 empty_sessions=1"
+    assert detail == "rows=0 sessions=0 empty_sessions=1 journal_entries=0"
 
 
 def test_session_detail_and_messages(client, auth, fake_replies):
@@ -167,6 +168,23 @@ def test_first_message_titles_the_conversation(client, auth, fake_replies):
     send(client, auth, session_id, "Work has been really stressful this whole week")
     send(client, auth, session_id, "Another message")
     assert client.get(f"/api/sessions/{session_id}", headers=auth).json()["title"] == "Work has been really stressful this..."
+
+
+def test_a_greeting_never_becomes_the_title(client, auth, fake_replies):
+    session_id = new_session(client, auth)
+    send(client, auth, session_id, "hi")
+    assert client.get(f"/api/sessions/{session_id}", headers=auth).json()["title"] == "Conversation"
+    send(client, auth, session_id, "Hey there! I'm back.")
+    send(client, auth, session_id, "My night shifts are wearing me down")
+    assert client.get(f"/api/sessions/{session_id}", headers=auth).json()["title"] == "My night shifts are wearing me..."
+
+
+@pytest.mark.parametrize(("text", "greeting"), [
+    ("hi", True), ("Hey there!", True), ("good morning :)", True), ("I'm back.", True), ("hello hello", True),
+    ("hi, I failed my exam", False), ("Hey, can we talk about my sister?", False), ("Highs and lows today", False),
+])
+def test_greeting_detection(text, greeting):
+    assert is_greeting(text) is greeting
 
 
 def test_reflection_keeps_its_own_title(client, auth, fake_replies):
@@ -327,7 +345,7 @@ def test_export_contains_only_the_users_own_history(client, db_session, auth, fa
     assert [m["content"] for m in session["messages"]] == ["Exams are stressing me out", MOCK_REPLY]
     assert "Not yours" not in response.text
     log = db_session.scalar(select(EventLog).where(EventLog.event_type == "history_exported"))
-    assert log.detail == "sessions=1"
+    assert log.detail == "sessions=1 journal_entries=0"
 
 
 def test_export_is_rate_limited(client, auth):

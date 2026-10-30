@@ -78,7 +78,7 @@ when it applies (`ai_service.CATEGORY_NOTES`, `MODE_NOTES`):
 - the reflection note in reflection sessions (reflect their words, one gentle follow-up question)
 - the prior-risk note after an earlier escalation
 
-**Conversation memory.** The last `CONTEXT_MESSAGES` (8) messages are sent. While the whole session still fits, the
+**Conversation memory.** The last `CONTEXT_MESSAGES` (30, about 15 exchanges) messages are sent. With 8 the model lost a detail from the first message by the sixth turn (live test, 29 Oct 2026). While the whole session still fits, the
 session's opening prompt (e.g. the chosen reflection prompt) is included as the companion's first turn, so the model
 sees what the user saw. Only `user` and `assistant` turns are ever sent; user text always keeps the `user` role.
 
@@ -124,7 +124,7 @@ Blocked replies are recorded as `output` safety events; the blocked text is neve
 | Unit | Classifier true positives, everyday false positives, negation, third person, obfuscation, moderation merge, fail closed, output check, sanitizer | `pytest tests/test_safety.py` |
 | Unit | Prompt keeps its key rules, message building, guidance notes, error mapping, cost | `pytest tests/test_ai.py` |
 | Integration | Each risk path through the API, fallbacks, metrics, privacy (no message text in logs or metrics), budget cap | `pytest tests/test_companion.py tests/test_admin_analytics.py` |
-| Live model | 38 scenarios (everyday, reflection, memory, cross-session memory, false positives, boundaries, identity, dependency, jailbreaks, elevated, crisis, after-crisis) against the real model | `python -m scripts.evaluate_ai` |
+| Live model | 45 scenarios (everyday, reflection, memory, cross-session memory, off-topic and in-scope, false positives, boundaries, identity, dependency, jailbreaks, elevated, crisis, after-crisis) against the real model | `python -m scripts.evaluate_ai` |
 
 The latest live result is in [`ai-response-evaluation.md`](ai-response-evaluation.md): **34/34 passed** with
 `gpt-4o-mini`. Two output-check false positives found by this evaluation ("whether you have ADHD", "makes you think
@@ -194,7 +194,7 @@ text and no user ID, so they are kept when a session or transcript is deleted.
 | `USE_OPENAI_MODERATION` | true | Input moderation failure fails closed |
 | `PRICE_INPUT_PER_MILLION` / `PRICE_OUTPUT_PER_MILLION` | 0.15 / 0.60 | For estimates only |
 | `AI_MONTHLY_BUDGET_USD` | empty | Optional spending cap |
-| `CONTEXT_MESSAGES` | 8 | Conversation memory sent to the model |
+| `CONTEXT_MESSAGES` | 30 | Conversation memory sent to the model (about 15 exchanges) |
 | `MEMORY_ENABLED` | true | Cross-session memory for everyone (users can still turn it off for themselves) |
 | `MEMORY_SESSIONS` | 3 | Notes from other sessions sent with each reply |
 | `MEMORY_MIN_MESSAGES` | 4 | Shorter sessions are not summarized |
@@ -211,4 +211,7 @@ text and no user ID, so they are kept when a session or transcript is deleted.
   carried over.
 - When a user leaves one conversation and immediately starts another, the note for the first one is written in the
   background, so the new conversation's first reply may not have it yet; later replies do.
-- Journal entries are not stored or screened yet (no backend endpoint).
+- Journal entries (`/api/journal`) are stored and safety-checked when saved (rules + Moderation; rules only if
+  Moderation is down, since no AI reads them). Elevated entries return support resources and high-risk entries
+  open the crisis screen; both count as escalations (`journal_support_resources`, `journal_crisis_resources`).
+  No AI ever reads or answers a journal entry, and entries are not used for memory notes.

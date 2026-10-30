@@ -50,11 +50,13 @@ Full details: backend/docs/frontend-integration.md
      GET /api/admin/analytics                          CONNECTED
    Admin "Recent Log Events": GET /api/admin/logs      CONNECTED
    Admin "Architecture Health": GET /api/health        CONNECTED
-   My Insights and admin Coping Tool Activity          SAMPLE DATA (no endpoint yet)
+   My Insights coping counts                           Journaling from GET /api/journal;
+                                                       breathing and grounding in this tab only
+   Admin Coping Tool Activity                          SAMPLE DATA (no endpoint yet)
 
 8. COPING TOOLS
-   Static, reviewed frontend content; no AI. Journal entries and tool
-   counts are not stored yet (no backend endpoint).
+   Static, reviewed frontend content; no AI. Journal entries are saved,
+   listed and deleted through /api/journal and safety-checked when saved.
 
 ============================================================
 */
@@ -62,7 +64,7 @@ Full details: backend/docs/frontend-integration.md
 
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
-import { onUnauthorized } from './services/apiClient'
+import { ApiError, onUnauthorized } from './services/apiClient'
 import { register, restoreSession, signIn, signOut } from './services/authService'
 import {
   MAX_MESSAGE_LENGTH,
@@ -76,6 +78,12 @@ import {
 } from './services/chatService'
 import { forgetAllNotes, forgetNote, getMemory, setMemoryEnabled } from './services/memoryService'
 import {
+  MAX_JOURNAL_LENGTH,
+  deleteJournalEntry,
+  listJournal,
+  saveJournalEntry
+} from './services/journalService'
+import {
   formatLogTime,
   formatNumber,
   formatUsd,
@@ -88,6 +96,10 @@ const CONVERSATION_STARTER = 'What would you like to talk about today?'
 
 // Screens that send messages; the support and safety-error screens return to them.
 const CHAT_SCREENS = ['conversation', 'reflection-chat', 'continue-session']
+
+const JOURNAL_PROMPT = 'What has been taking up most of your energy lately?'
+// Journal entries shown at a time on Coping Tools ("Show more" loads the next page).
+const JOURNAL_PAGE_SIZE = 5
 
 // History shows this many sessions at a time ("Show more" loads the next page).
 const HISTORY_PAGE_SIZE = 20
@@ -172,7 +184,7 @@ function MessageBubble({ item }) {
 
 // MY ANALYTICS SCREEN
 // Session metrics are calculated from the authenticated user's sessions.
-// Coping-tool counts are tracked locally in the current browser tab.
+// Journaling counts saved journal entries; breathing and grounding are tracked in this browser tab.
 
 
 // ADMIN DASHBOARD DATA
@@ -306,6 +318,15 @@ function App() {
     breathing: 0
   })
 
+  const [journalText, setJournalText] = useState('')
+  // Journal (GET /api/journal): saved entries, total count and how long entries are kept.
+  const [journal, setJournal] = useState({ entries: [], total: 0, retentionDays: 0, loaded: false })
+  const [journalError, setJournalError] = useState('')
+  // After a save: { text, resources } (resources only for a support reply)
+  const [journalNotice, setJournalNotice] = useState(null)
+  // 'save' | 'more' | an entry id while that journal action runs
+  const [journalBusy, setJournalBusy] = useState(null)
+
   function resetUserState() {
     setMessages([])
     setMessage('')
@@ -336,6 +357,11 @@ function App() {
     setAdminLogin(false)
     setBreathingActive(false)
     setCopingUsage({ journaling: 0, grounding: 0, breathing: 0 })
+    setJournalText('')
+    setJournal({ entries: [], total: 0, retentionDays: 0, loaded: false })
+    setJournalError('')
+    setJournalNotice(null)
+    setJournalBusy(null)
   }
 
   // SIGN-IN RESTORE AND EXPIRY
@@ -390,8 +416,12 @@ function App() {
   // History also reloads its first page when the type tab or the search changes.
   useEffect(() => {
     const loaders = {
-      // My Insights counts every session (the backend allows up to 200 per request).
-      analytics: async () => setConversationSessions((await listSessions({ limit: 200 })).sessions),
+      // My Insights counts every session (the backend allows up to 200 per request) and journal entry.
+      analytics: async () => {
+        const [page, saved] = await Promise.all([listSessions({ limit: 200 }), listJournal({ limit: 1 })])
+        setConversationSessions(page.sessions)
+        setJournal((current) => ({ ...current, total: saved.total }))
+      },
       history: async () => {
         const page = await listSessions({ type: historyType, q: historySearch, limit: HISTORY_PAGE_SIZE })
         setConversationSessions(page.sessions)
@@ -423,7 +453,7 @@ function App() {
       .catch((error) => {
         if (cancelled) return
 
-
+        console.error(`Unable to load the ${currentScreen} screen:`, error)
 
         // Don't leave data from an earlier load on screen under the error.
         if (currentScreen === 'history' || currentScreen === 'analytics') {
@@ -450,6 +480,112 @@ function App() {
       cancelled = true
     }
   }, [currentScreen, historyType, historySearch])
+
+  // JOURNAL: the saved entries, loaded when Coping Tools opens.
+  // Loaded separately so the other coping tools still work if this request fails.
+  useEffect(() => {
+    if (currentScreen !== 'coping-tools') return
+
+    let cancelled = false
+    listJournal({ limit: JOURNAL_PAGE_SIZE })
+      .then((data) => {
+        if (cancelled) return
+        setJournal({ ...data, loaded: true })
+        setJournalError('')
+      })
+      .catch((error) => {
+        if (cancelled) return
+        console.error('Unable to load journal entries:', error)
+        setJournalError('We could not load your journal entries. Check your connection and try again.')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentScreen])
+
+  // JOURNAL: save an entry (POST /api/journal). It is safety-checked: a support reply shows
+  // resources under the form; a crisis opens the Support & Crisis Resources screen.
+  async function saveJournal(event) {
+    event.preventDefault()
+    const text = journalText.trim()
+    if (!text || journalBusy) return
+
+    setJournalBusy('save')
+    setJournalError('')
+    setJournalNotice(null)
+    try {
+      const saved = await saveJournalEntry(text, JOURNAL_PROMPT)
+      setJournal((current) => ({
+        ...current,
+        entries: [saved.entry, ...current.entries],
+        total: current.total + 1
+      }))
+      setJournalText('')
+      setJournalNotice({
+        text: saved.status === 'ok'
+          ? 'Saved to your journal.'
+          : "Saved to your journal. It sounds like things are hard right now. You don't have to go through it alone.",
+        resources: saved.resources
+      })
+      if (saved.status === 'crisis') {
+        setReturnScreen('coping-tools')
+        setCurrentScreen('support-resources')
+      }
+    } catch (error) {
+      console.error('Unable to save journal entry:', error)
+      // The text stays in the box so nothing is lost.
+      setJournalError(error.status > 0
+        ? error.message
+        : 'We could not save your entry. Check your connection and try again.')
+    } finally {
+      setJournalBusy(null)
+    }
+  }
+
+  async function loadMoreJournal() {
+    if (journalBusy) return
+
+    setJournalBusy('more')
+    setJournalError('')
+    try {
+      const page = await listJournal({ limit: JOURNAL_PAGE_SIZE, offset: journal.entries.length })
+      setJournal((current) => {
+        const shown = new Set(current.entries.map((entry) => entry.id))
+        return {
+          ...current,
+          total: page.total,
+          entries: [...current.entries, ...page.entries.filter((entry) => !shown.has(entry.id))]
+        }
+      })
+    } catch (error) {
+      console.error('Unable to load more journal entries:', error)
+      setJournalError('We could not load more entries. Check your connection and try again.')
+    } finally {
+      setJournalBusy(null)
+    }
+  }
+
+  async function removeJournalEntry(entry) {
+    if (journalBusy) return
+    if (!window.confirm('Delete this journal entry? This removes it permanently.')) return
+
+    setJournalBusy(entry.id)
+    setJournalError('')
+    try {
+      await deleteJournalEntry(entry.id)
+      setJournal((current) => ({
+        ...current,
+        entries: current.entries.filter((item) => item.id !== entry.id),
+        total: Math.max(0, current.total - 1)
+      }))
+    } catch (error) {
+      console.error('Unable to delete journal entry:', error)
+      setJournalError('We could not delete this entry. Check your connection and try again.')
+    } finally {
+      setJournalBusy(null)
+    }
+  }
 
   // MEMORY: what the companion remembers, shown on the History screen.
   // Loaded separately so History still works if this request fails.
@@ -638,8 +774,6 @@ function App() {
     }, 1000)
     return () => clearInterval(timer)
   }, [breathingActive])
-  const [journalText, setJournalText] = useState('')
-  const [journalSaved, setJournalSaved] = useState(false)
   const [groundingStarted, setGroundingStarted] = useState(false)
 
   function recordCopingUsage(tool) {
@@ -657,12 +791,14 @@ function App() {
     const form = event.currentTarget.elements
     const username = form.username.value
     const password = form.password.value
+    // Only when "Create an administrator account" is checked.
+    const adminCode = authMode === 'register' && adminLogin ? form['admin-code'].value : null
 
     setAuthBusy(true)
     setLoginError('')
     try {
       const user = authMode === 'register'
-        ? await register(username, password)
+        ? await register(username, password, adminCode)
         : await signIn(username, password, adminLogin)
 
       setCurrentUser(user)
@@ -725,6 +861,17 @@ function App() {
       return true
     } catch (error) {
       console.error('Message request failed:', error)
+
+      // The server answered with an error that is not about the safety check (rate limit,
+      // conversation limit, AI unavailable, message too long): show its message here and
+      // give the text back. Nothing was saved. An expired sign-in goes to the login screen.
+      if (error instanceof ApiError && error.status > 0) {
+        if (error.status !== 401) {
+          setList([...currentMessages, { role: 'notice', text: error.message }])
+          setInput(userMessage)
+        }
+        return false
+      }
 
       // Safety backend integration:
       // If the safety check cannot be completed, fail closed.
@@ -914,7 +1061,9 @@ function App() {
             {/* AUTHENTICATION
                 The server checks the credentials and returns the account's role.
                 With "Sign in as Administrator" checked, a non-admin account is
-                refused (403) and the person stays on this screen. */}
+                refused (403) and the person stays on this screen.
+                With "Create an administrator account" checked, the server creates
+                an admin only if the administrator code is correct. */}
             <form className='login-form' onSubmit={handleAuthSubmit}>
 
               <label htmlFor='username'>Username</label>
@@ -937,9 +1086,11 @@ function App() {
                 id='password'
                 type='password'
                 autoComplete={registering ? 'new-password' : 'current-password'}
-                minLength={registering ? 8 : undefined}
+                minLength={registering ? (adminLogin ? 12 : 8) : undefined}
                 maxLength={128}
-                placeholder={registering ? 'At least 8 characters' : 'Enter your password'} required />
+                placeholder={registering
+                  ? (adminLogin ? 'At least 12 characters' : 'At least 8 characters')
+                  : 'Enter your password'} required />
 
               {!registering && (
                 <label className='login-admin-option' htmlFor='admin-login'>
@@ -954,6 +1105,38 @@ function App() {
                   />
                   Sign in as Administrator
                 </label>
+              )}
+
+              {registering && (
+                <label className='login-admin-option' htmlFor='admin-register'>
+                  <input
+                    id='admin-register'
+                    type='checkbox'
+                    checked={adminLogin}
+                    onChange={(event) => {
+                      setAdminLogin(event.target.checked)
+                      setLoginError('')
+                    }}
+                  />
+                  Create an administrator account
+                </label>
+              )}
+
+              {registering && adminLogin && (
+                <>
+                  <label htmlFor='admin-code'>Administrator code</label>
+                  <input
+                    id='admin-code'
+                    type='password'
+                    autoComplete='off'
+                    maxLength={200}
+                    placeholder='Code from the project team'
+                    required
+                  />
+                  <p className='form-hint'>
+                    Administrators can see usage, safety and cost figures, never anyone's conversations.
+                  </p>
+                </>
               )}
 
               {loginError && (
@@ -1687,39 +1870,104 @@ function App() {
               <p>Use a prompt to pause and reflect on what's on your mind</p>
               <div className='journaling-prompt'>
                 <strong>Reflection prompt</strong>
-                <p>What has been taking up most of your energy lately?</p>
+                <p>{JOURNAL_PROMPT}</p>
               </div>
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault()
-
-                  if (!journalText.trim()) return
-
-                  recordCopingUsage('journaling')
-                  setJournalText('')
-                  setJournalSaved(true)
-                }}
-              >
+              <form onSubmit={saveJournal}>
+                <label className='visually-hidden' htmlFor='journal-entry'>Journal entry</label>
                 <textarea
                   id='journal-entry'
                   value={journalText}
+                  maxLength={MAX_JOURNAL_LENGTH}
                   onChange={(event) => {
                     setJournalText(event.target.value)
-                    setJournalSaved(false)
+                    setJournalNotice(null)
                   }}
                   placeholder='Write your thoughts here...'
                   rows={4}
                 />
 
-                <button className='primary-button' type='submit'>
-                  Save Reflection Journal
+                <button
+                  className='primary-button'
+                  type='submit'
+                  disabled={journalBusy === 'save' || !journalText.trim()}
+                >
+                  {journalBusy === 'save' ? 'Saving...' : 'Save Reflection Journal'}
                 </button>
               </form>
 
-              {journalSaved && (
-                <p role='status'>
-                  Reflection recorded for this prototype.
-                </p>
+              <p className='form-hint journal-privacy'>
+                Your journal is private: only you can see it, and no AI reads it.
+                {journal.retentionDays > 0 && ` Entries are deleted after ${journal.retentionDays} days.`}
+              </p>
+
+              {journalNotice && (
+                <div className='journal-notice' role='status'>
+                  <p>{journalNotice.text}</p>
+                  {journalNotice.resources.length > 0 && (
+                    <div className='message-resources'>
+                      <strong>Support is available</strong>
+                      {journalNotice.resources.map((resource) => (
+                        <div className='message-resource' key={resource.id}>
+                          <div>
+                            <span className='message-resource-name'>{resource.name}</span>
+                            <span className='message-resource-description'>{resource.description}</span>
+                          </div>
+                          <a className='support-resource-button' href={resource.href}>{resource.action_label}</a>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {journalError && <p className='login-error' role='alert'>{journalError}</p>}
+
+              {journal.loaded && (
+                <div className='journal-entries'>
+                  <h3>
+                    Your journal
+                    {journal.total > 0 && (
+                      <span className='session-count'>
+                        {' '}· {journal.total} {journal.total === 1 ? 'entry' : 'entries'}
+                      </span>
+                    )}
+                  </h3>
+
+                  {journal.entries.length === 0 && (
+                    <p className='status-text'>No entries yet. What you save appears here.</p>
+                  )}
+
+                  <ul className='memory-list'>
+                    {journal.entries.map((entry) => (
+                      <li key={entry.id} className='memory-note journal-entry'>
+                        <div>
+                          <span className='session-date'>{entry.date}</span>
+                          <p className='journal-entry-text'>{entry.text}</p>
+                        </div>
+                        <button
+                          className='session-delete-button'
+                          type='button'
+                          aria-label={`Delete the journal entry from ${entry.date}`}
+                          disabled={journalBusy !== null}
+                          onClick={() => removeJournalEntry(entry)}
+                        >
+                          {journalBusy === entry.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {journal.entries.length < journal.total && (
+                    <button
+                      className='history-more-button'
+                      type='button'
+                      disabled={journalBusy !== null}
+                      onClick={loadMoreJournal}
+                    >
+                      {journalBusy === 'more' ? 'Loading...' : 'Show more'}
+                    </button>
+                  )}
+                </div>
               )}
 
             </section>
@@ -1750,7 +1998,7 @@ function App() {
                 </div>
                 <div>
                   <strong>1</strong>
-                  <span>things you can notice about your breathing</span>
+                  <span>thing you can notice about your breathing</span>
                 </div>
               </div>
 
@@ -2099,7 +2347,8 @@ function App() {
         },
         {
           name: 'Journaling',
-          completed: copingUsage.journaling
+          // Saved entries (from the server), not just this tab.
+          completed: journal.total
         },
         {
           name: 'Grounding',
@@ -2156,7 +2405,8 @@ function App() {
             </p>
           )}
 
-          {screenLoading || screenLoadError ? null : analytics.totalSessions === 0 ? (
+          {screenLoading || screenLoadError ? null
+            : analytics.totalSessions === 0 && analytics.tools.every((tool) => tool.completed === 0) ? (
 
             <section className='analytics-card'>
 
@@ -2520,7 +2770,9 @@ function App() {
                   </article>
 
 
-                  <article className='analytics-stat-card is-alert'>
+                  <article
+                    className={`analytics-stat-card${adminAnalytics.safetyCheckErrors > 0 ? ' is-alert' : ''}`}
+                  >
 
                     <span className='analytics-stat-label'>
                       Safety Check Errors

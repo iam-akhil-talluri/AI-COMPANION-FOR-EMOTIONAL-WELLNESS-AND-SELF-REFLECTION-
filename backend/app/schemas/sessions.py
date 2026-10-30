@@ -37,12 +37,22 @@ class SessionDetail(SessionSummary):
     messages: list[MessageOut]
 
 
+class ExportedJournalEntry(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    prompt: str | None
+    content: str
+    created_at: datetime
+
+
 class HistoryExport(BaseModel):
-    """Everything in the user's History, for download."""
+    """Everything in the user's History and journal, for download."""
 
     exported_at: datetime
     username: str
     sessions: list[SessionDetail]
+    journal: list[ExportedJournalEntry] = Field(default_factory=list)
 
 
 class MessageCreate(BaseModel):

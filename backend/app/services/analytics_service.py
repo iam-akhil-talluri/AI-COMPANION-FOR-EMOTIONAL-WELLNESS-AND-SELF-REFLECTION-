@@ -15,8 +15,8 @@ from app.db.models import ConversationSession, Interaction, SafetyEvent
 from app.db.types import utc_now
 from app.services.chat_service import month_to_date_cost
 
-CRISIS_ACTIONS = {"crisis_template"}
-SUPPORT_ACTIONS = {"support_template", "ai_with_support_note"}
+CRISIS_ACTIONS = {"crisis_template", "journal_crisis_resources"}
+SUPPORT_ACTIONS = {"support_template", "ai_with_support_note", "journal_support_resources"}
 
 
 def _days(period_days: int) -> list[date]:

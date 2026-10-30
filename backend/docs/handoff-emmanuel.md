@@ -18,7 +18,7 @@ work plugs in, what the backend already does for you, and what it expects in ret
 | Accounts | `app/api/auth.py`, `app/services/user_service.py` | Pseudonymous sign-up and sign-in, admin role |
 | Sessions | `app/api/sessions.py`, `app/services/conversation_service.py` | Create, list, open and delete sessions; each user sees only their own |
 | Sending a message | `app/services/chat_service.py` | Validates the message, applies rate and length limits, loads memory, asks **your** code for a reply, saves both messages |
-| Conversation memory | `recent_context()` in `conversation_service.py` | The last `CONTEXT_MESSAGES` (default 8) messages of the session, oldest first |
+| Conversation memory | `recent_context()` in `conversation_service.py` | The last `CONTEXT_MESSAGES` (default 30) messages of the session, oldest first |
 | Logging | `app/services/event_log.py` | Operational events without message text; admins read them at `GET /api/admin/logs` |
 | Limits | `app/config.py` | 2,000 characters per message, 100 messages per session, 10 per minute and 120 per hour per user |
 
@@ -40,7 +40,7 @@ set_reply_provider(companion_reply)
 
 - `message`: the user's new message, already trimmed, non-empty, and at most `MAX_MESSAGE_CHARS` (2,000) characters.
 - `context`: the earlier messages of the same session, **oldest first, not including the new message**, at most
-  `CONTEXT_MESSAGES` (default 8) items:
+  `CONTEXT_MESSAGES` (default 30) items:
 
   ```python
   [

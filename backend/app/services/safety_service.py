@@ -94,10 +94,13 @@ RULES: dict[str, list[tuple[str, list[str]]]] = {
             r"\b(sleep|go to sleep|fall asleep) and (never|not) wake up\b",
             r"\bnever wake up again\b",
             r"\b(i'?m|i am|so) done with (life|living)\b",
-            r"\b(nobody|no one) would (care|notice|miss me) if i (was|were) (gone|dead)\b",
+            r"\b(nobody|no ?one) would (even )?(care|notice|miss me) if i (was|were) (gone|dead|not here)\b",
+            r"\b(nobody|no ?one) would (even )?(care|notice|miss me) if i "
+            r"(disappeared|died|vanished|was gone|were gone)\b",
+            r"\bwish i (didn'?t|did not) exist\b",
             r"\bkms\b",
             r"\bunaliv(e|ing)( myself)?\b",
-            r"\b(want|wanna) to disappear (forever|for good)\b",
+            r"\b((want|wanna) to|wish i could( just)?) disappear (forever|for good)\b",
         ]),
         ("self_harm", [
             rf"\b(want|wanna|going|gonna|urge|urges|feel like|thinking about|thought about|been|keep|kept|started|"
@@ -140,6 +143,9 @@ RULES: dict[str, list[tuple[str, list[str]]]] = {
             r"\b(i'?m|i am|i feel like|feel like) (such )?a burden\b",
             r"\bi hate my life\b",
             r"\b(want|wanna) to disappear\b",
+            # "I wish I could just disappear", but not "...disappear into a book this weekend".
+            r"\bwish i could( just)? disappear"
+            r"(?=\s*([.!?,;]|$|and\b|from (everything|everyone|it all|(the|this) world)))",
             r"\beverything (is|feels) (pointless|meaningless)\b",
         ]),
         ("isolation", [
@@ -194,7 +200,14 @@ RULES: dict[str, list[tuple[str, list[str]]]] = {
             r"\bmy only friend\b",
         ]),
         ("identity_question", [
-            r"\bare you (a )?(human|real|a real person|a person|conscious|alive|sentient)\b",
+            r"\b(are|r) (you|u) (actually |really |even )?(an? )?(real |actual )?"
+            r"(human|real|person|bot|robot|machine|ai|chatbot|computer|conscious|alive|sentient)\b",
+            # "Am I talking to a real person?" but not "I need to talk to a real person about this".
+            r"\b(am i|are we|is this) (talking|speaking|chatting) (to|with) (an? )?(real |actual )?"
+            r"(human|person|bot|robot|machine|ai|chatbot)\b",
+            r"\b(is this|is it) (an? )?(human|person|bot|ai|robot)\b",
+            r"\b(human|person) or (an? )?(ai|bot|robot|machine)\b",
+            r"\b(ai|bot|robot|machine) or (a )?(human|person)\b",
             r"\bdo you (have|feel) (feelings|emotions)\b",
             r"\bdo you (love|care about) me\b",
         ]),

@@ -46,6 +46,9 @@ class User(Base):
     sessions: Mapped[list["ConversationSession"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", passive_deletes=True
     )
+    journal_entries: Mapped[list["JournalEntry"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", passive_deletes=True
+    )
 
 
 class ConversationSession(Base):
@@ -89,6 +92,25 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utc_now)
 
     session: Mapped[ConversationSession] = relationship(back_populates="messages")
+
+
+class JournalEntry(Base):
+    """A private journal entry from the Coping Tools screen. Only its author can read it; no AI reply."""
+
+    __tablename__ = "journal_entries"
+    __table_args__ = (
+        Index("ix_journal_entries_user_created", "user_id", "created_at"),
+        MYSQL_TABLE_OPTIONS,
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    # The reflection prompt shown above the box when the entry was written.
+    prompt: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utc_now, index=True)
+
+    user: Mapped[User] = relationship(back_populates="journal_entries")
 
 
 RISK_LEVELS = ("low", "moderate", "elevated", "high")

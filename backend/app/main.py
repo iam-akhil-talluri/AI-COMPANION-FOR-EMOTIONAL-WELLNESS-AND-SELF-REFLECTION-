@@ -8,13 +8,15 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, health, logs, memory, sessions
+from app.api import auth, health, journal, logs, memory, sessions
 from app.config import Settings, get_settings
+from app.db.session import get_sessionmaker
 from app.errors import register_error_handlers
 from app.logging_config import configure_logging
 from app.middleware import RequestGuardMiddleware, SecurityHeadersMiddleware
 from app.services import reply_provider
 from app.services.companion import companion_reply
+from app.services.health_service import log_schema_problems
 from app.services.memory_service import memory_loop
 from app.services.retention import retention_loop
 
@@ -30,6 +32,8 @@ async def lifespan(app: FastAPI):
     if not settings.ai_configured:
         logger.warning("OPENAI_API_KEY is not set: everyday messages will return 503 reply_unavailable; "
                        "crisis and support messages still get the reviewed response")
+    with get_sessionmaker()() as db:
+        log_schema_problems(db)
     tasks = []
     if settings.retention_days > 0 and settings.retention_interval_hours > 0:
         tasks.append(asyncio.create_task(retention_loop(settings)))
@@ -73,7 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware)
 
     register_error_handlers(app)
-    for router in (health.router, auth.router, sessions.router, memory.router, logs.router):
+    for router in (health.router, auth.router, sessions.router, memory.router, journal.router, logs.router):
         app.include_router(router)
 
     # Every message goes through the safety layer before any AI call (app/services/companion.py).

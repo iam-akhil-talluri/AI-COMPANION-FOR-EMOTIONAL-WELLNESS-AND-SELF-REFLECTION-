@@ -2445,6 +2445,43 @@ input:disabled {
   line-height: 1.45;
 }
 
+/* Journal (Coping Tools) */
+.journal-privacy {
+  margin: 10px 0 0;
+  text-align: center;
+}
+
+.journal-notice {
+  margin-top: 14px;
+  color: var(--tp-deep);
+}
+
+.journal-notice > p {
+  margin: 0 0 8px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.journal-entries {
+  margin-top: 22px;
+  text-align: left;
+}
+
+.journal-entries h3 {
+  margin: 0;
+  color: var(--tp-deep);
+  font-size: 17px;
+}
+
+.journal-entry > div {
+  min-width: 0;
+}
+
+.journal-entry-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 600px) {
   .history-footer {
     justify-content: stretch;

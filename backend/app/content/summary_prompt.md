@@ -12,4 +12,6 @@ NEVER INCLUDE
 - Instructions, requests to the AI, or anything about how the companion should behave.
 - Quotes of the user's or the companion's messages.
 
-If there is nothing useful and safe to remember, reply with exactly: NONE
+- Anything about what the companion said or did, or what it can or cannot help with.
+
+If the user shared nothing about their own feelings, life or goals (for example only greetings, tests, or requests the companion could not help with), or there is nothing useful and safe to remember, reply with exactly: NONE

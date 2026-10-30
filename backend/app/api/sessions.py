@@ -13,6 +13,7 @@ from app.errors import AppError
 from app.schemas import ErrorResponse
 from app.schemas.sessions import (
     ChatResponse,
+    ExportedJournalEntry,
     HistoryExport,
     MessageCreate,
     MessageOut,
@@ -31,6 +32,7 @@ from app.services.conversation_service import (
     list_sessions,
 )
 from app.services.event_log import log_event
+from app.services.journal_service import list_entries
 from app.services.memory_service import summarize_user_sessions
 from app.services.rate_limiter import limiter
 
@@ -90,14 +92,15 @@ def remove_all_sessions(user: User = Depends(current_user), db: Session = Depend
 # Declared before /{session_id} so "export" is not read as a session ID.
 @router.get("/export", response_model=HistoryExport, responses={429: {"model": ErrorResponse}})
 def export_sessions(user: User = Depends(current_user), db: Session = Depends(get_db)) -> HistoryExport:
-    """Download the user's whole History (sessions and messages) as JSON."""
+    """Download the user's whole History (sessions and messages) and journal as JSON."""
     if not limiter.allow(f"export:user:{user.id}", EXPORTS_PER_HOUR, 3600):
         raise AppError("rate_limited", 429, "You've downloaded your history several times recently. "
                        "Please try again later.", headers={"Retry-After": "3600"})
     sessions = [_detail(conversation, messages) for conversation, messages in export_history(db, user.id)]
-    log_event(db, "history_exported", detail=f"sessions={len(sessions)}")
+    journal = [ExportedJournalEntry.model_validate(e) for e in list_entries(db, user.id, limit=100_000)]
+    log_event(db, "history_exported", detail=f"sessions={len(sessions)} journal_entries={len(journal)}")
     db.commit()
-    return HistoryExport(exported_at=utc_now(), username=user.username, sessions=sessions)
+    return HistoryExport(exported_at=utc_now(), username=user.username, sessions=sessions, journal=journal)
 
 
 @router.get("/{session_id}", response_model=SessionDetail, responses={404: {"model": ErrorResponse}})

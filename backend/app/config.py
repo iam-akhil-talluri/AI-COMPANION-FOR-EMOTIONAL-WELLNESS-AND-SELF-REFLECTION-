@@ -1,6 +1,7 @@
 """Application settings, loaded from environment variables and `.env`."""
 
 import logging
+import os
 import secrets
 from functools import lru_cache
 from typing import Literal
@@ -11,6 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 logger = logging.getLogger(__name__)
 
 MIN_JWT_SECRET_LENGTH = 32
+MIN_ADMIN_CODE_LENGTH = 12
 
 
 class Settings(BaseSettings):
@@ -28,9 +30,13 @@ class Settings(BaseSettings):
     jwt_secret: str = Field(default="", validation_alias="JWT_SECRET")
     jwt_expire_minutes: int = Field(default=480, ge=5, validation_alias="JWT_EXPIRE_MINUTES")
     allow_registration: bool = Field(default=True, validation_alias="ALLOW_REGISTRATION")
+    # Lets someone create an administrator account from the sign-in page by entering this code.
+    # Empty turns that off (admins are then created with scripts/create_admin.py only).
+    admin_registration_code: str = Field(default="", validation_alias="ADMIN_REGISTRATION_CODE")
 
-    # Number of recent messages passed to the reply provider.
-    context_messages: int = Field(default=8, ge=1, validation_alias="CONTEXT_MESSAGES")
+    # Number of recent messages of the session passed to the reply provider. 30 is about 15 exchanges,
+    # enough for the model to follow a normal conversation (about $0.0004 per reply on gpt-4o-mini).
+    context_messages: int = Field(default=30, ge=1, validation_alias="CONTEXT_MESSAGES")
 
     # Cross-session memory: a short, safety-checked note per session (app/services/memory_service.py).
     memory_enabled: bool = Field(default=True, validation_alias="MEMORY_ENABLED")
@@ -63,6 +69,9 @@ class Settings(BaseSettings):
     ai_monthly_budget_usd: float | None = Field(default=None, gt=0, validation_alias="AI_MONTHLY_BUDGET_USD")
 
     max_message_chars: int = Field(default=2000, ge=1, validation_alias="MAX_MESSAGE_CHARS")
+    max_journal_chars: int = Field(default=5000, ge=1, validation_alias="MAX_JOURNAL_CHARS")
+    # Journal entries a user can save per hour.
+    journal_entries_per_hour: int = Field(default=30, ge=1, validation_alias="JOURNAL_ENTRIES_PER_HOUR")
     max_messages_per_session: int = Field(default=100, ge=2, validation_alias="MAX_MESSAGES_PER_SESSION")
     rate_limit_per_minute: int = Field(default=10, ge=1, validation_alias="RATE_LIMIT_PER_MINUTE")
     rate_limit_per_hour: int = Field(default=120, ge=1, validation_alias="RATE_LIMIT_PER_HOUR")
@@ -70,7 +79,10 @@ class Settings(BaseSettings):
     cors_origins: str = Field(default="http://localhost:5173", validation_alias="CORS_ORIGINS")
     enable_api_docs: bool = Field(default=True, validation_alias="ENABLE_API_DOCS")
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
+    # The test suite (ENVIRONMENT=test in the process environment) never reads a developer's .env:
+    # its admin code, context size or memory settings would change what the tests see.
+    model_config = SettingsConfigDict(env_file=None if os.environ.get("ENVIRONMENT") == "test" else ".env",
+                                      extra="ignore", populate_by_name=True)
 
     @model_validator(mode="before")
     @classmethod
@@ -90,6 +102,10 @@ class Settings(BaseSettings):
             # Non-production only: tokens become invalid when the process restarts.
             self.jwt_secret = secrets.token_urlsafe(48)
             logger.warning("JWT_SECRET is not set; using a temporary key (sign-ins reset on restart)")
+        code = self.admin_registration_code.strip()
+        if code and len(code) < MIN_ADMIN_CODE_LENGTH:
+            raise ValueError(f"ADMIN_REGISTRATION_CODE must be at least {MIN_ADMIN_CODE_LENGTH} characters, "
+                             "or empty to turn off admin sign-up")
         return self
 
     @property
@@ -99,6 +115,10 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def admin_registration_enabled(self) -> bool:
+        return bool(self.admin_registration_code.strip())
 
     @property
     def ai_configured(self) -> bool:

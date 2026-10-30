@@ -31,7 +31,8 @@ teammate. It closes the setup, account, session, messaging and admin-log gaps li
 | AI replies and safety screening (support resources, crisis routing, Safety Check Unavailable) | **Connected** | `POST /api/sessions/{id}/messages` (see `ai-and-safety.md`) |
 | Admin: Overview, Session Frequency, Escalations, Safety Decisions, Cost & AI Usage (with token and cost charts) | **Connected** | `GET /api/admin/analytics` |
 | My Insights, admin Coping Tool Activity | Not connected: no endpoint (Korey) | — |
-| Journal save, coping-tool counts | Not connected: no endpoint | — |
+| Journal save, list, delete | **Connected** | `GET/POST /api/journal`, `DELETE /api/journal/{id}` |
+| Breathing and grounding counts | Not connected: no endpoint | — |
 
 **Update (safety and AI layer connected):** replies now come from the companion pipeline. `support` replies show
 support resource cards under the reply, `crisis` replies open the Support & Crisis Resources screen (with a "Back to
@@ -64,6 +65,9 @@ Backend code was **not** changed for this work.
 - **New:** a "Create an account" / "Sign in" switch. In create mode it adds a hint ("3-32 letters, numbers… please
   don't use your real name or email") and the input limits that match the backend (username 3-32 characters,
   password 8-128 characters).
+- **New:** in create mode, **"Create an administrator account"** shows an "Administrator code" field. The server
+  creates an admin only when the code matches `ADMIN_REGISTRATION_CODE` (wrong code: "That administrator code is
+  not correct."; code not set on the server: "Administrator accounts can't be created here…").
 - The button shows "Please wait..." during the request, and server errors (`detail`) appear under the form.
 - **New:** a "Loading..." screen while a saved sign-in is checked on page load.
 - The placeholder note "Prototype Placeholder login…" is replaced by "No email or real name is needed…".
@@ -182,7 +186,7 @@ project. The backend was then run without it, to test the real current behaviour
 | "Safety Check Unavailable" triggered by the backend | Needs a `safety_unavailable` error from the safety layer | Emmanuel |
 | My Insights | No `GET /api/analytics/me` | Korey |
 | Admin Overview, Session Frequency, Escalations, Safety Decisions, Coping Tool Activity, Cost & AI Usage | No endpoints | Korey / Emmanuel |
-| Journal save and coping-tool counts | No endpoints; counts stay in the browser tab and reset on sign-out | Team decision |
+| Breathing and grounding counts | No endpoints; counts stay in the browser tab and reset on sign-out (Journaling in My Insights counts saved entries) | Team decision |
 
 These screens keep the existing sample data and behaviour, unchanged.
 

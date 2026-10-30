@@ -4,6 +4,8 @@
   Accounts are pseudonymous: a username and a password, no email or real name.
   The server decides the role. Signing in with the Administrator checkbox
   sends admin: true, and the server refuses (403) if the account is not an admin.
+  Creating an administrator account needs the administrator code set on the
+  server (ADMIN_REGISTRATION_CODE); without it the server refuses (403).
 */
 
 import { apiRequest, clearToken, getToken, setToken } from './apiClient'
@@ -19,11 +21,18 @@ export async function signIn(username, password, asAdmin) {
   return data.user
 }
 
-export async function register(username, password) {
+// adminCode: pass it to create an administrator account instead of a user account.
+export async function register(username, password, adminCode = null) {
+  const body = { username: username.trim(), password }
+  if (adminCode !== null) {
+    body.admin = true
+    body.admin_code = adminCode
+  }
+
   const data = await apiRequest('/api/auth/register', {
     method: 'POST',
     auth: false,
-    body: { username: username.trim(), password }
+    body
   })
 
   setToken(data.token)

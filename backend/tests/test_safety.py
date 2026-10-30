@@ -37,6 +37,10 @@ def fake_moderation(*flagged: str, fail: bool = False) -> MagicMock:
     ("what's the point of living", "suicidal_intent"),
     ("I keep thinking about suicide", "suicidal_intent"),
     ("kms", "suicidal_intent"),
+    ("nobody would notice if I disappeared", "suicidal_intent"),
+    ("No one would even care if I died", "suicidal_intent"),
+    ("I wish I didn't exist", "suicidal_intent"),
+    ("I wish I could disappear forever", "suicidal_intent"),
     ("I've been cutting myself again", "self_harm"),
     ("I have the urge to hurt myself", "self_harm"),
     ("How many pills would it take to overdose?", "harmful_instructions"),
@@ -59,6 +63,8 @@ def test_high_risk_messages(message, category):
     ("I can't cope with any of this anymore", "severe_distress"),
     ("Everything feels hopeless", "severe_distress"),
     ("I feel like such a burden to my family", "severe_distress"),
+    ("I wish I could just disappear", "severe_distress"),
+    ("Some days I wish I could disappear from everything.", "severe_distress"),
     ("Nobody cares about me", "isolation"),
     ("I have no one to talk to", "isolation"),
     ("I'm not suicidal, just really tired of everything", "negated_risk"),
@@ -85,6 +91,14 @@ def test_elevated_risk_messages(message, category):
     ("You're the only one who understands me", "dependency"),
     ("promise you'll never leave me", "dependency"),
     ("Are you a real person?", "identity_question"),
+    ("Are you a real human?", "identity_question"),
+    ("Are you a bot?", "identity_question"),
+    ("Are you an AI?", "identity_question"),
+    ("are you actually a person", "identity_question"),
+    ("r u human", "identity_question"),
+    ("Am I talking to a real person?", "identity_question"),
+    ("Is this a human or AI?", "identity_question"),
+    ("Is this a bot or a person?", "identity_question"),
 ])
 def test_moderate_risk_messages(message, category):
     result = classify_with_rules(message)
@@ -105,6 +119,13 @@ def test_moderate_risk_messages(message, category):
     "I'm writing a report on suicide prevention for class",
     "Help me organize my thoughts about moving",
     "I feel a bit lonely since my friends moved away",
+    "I need to talk to a real person about this, maybe my sister",
+    "My coworker is such a robot in meetings",
+    "Is this normal to feel after a breakup?",
+    "I've been chatting with a person from my class",
+    "I wish I could disappear into a book this weekend",
+    "My keys disappeared again",
+    "Nobody would notice if I left the party early",
 ])
 def test_everyday_messages_are_low_risk(message):
     assert classify_with_rules(message).risk_level == "low", message

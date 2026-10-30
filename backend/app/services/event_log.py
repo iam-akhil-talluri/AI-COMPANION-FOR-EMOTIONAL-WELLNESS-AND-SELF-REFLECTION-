@@ -19,6 +19,8 @@ EVENT_TYPES = {
     "api_error",
     "rate_limit_triggered",
     "user_registered",
+    "admin_registered",
+    "admin_registration_failed",
     "user_login",
     "admin_login",
     "login_failed",
@@ -34,6 +36,8 @@ EVENT_TYPES = {
     "memory_setting_changed",
     "history_cleared",
     "history_exported",
+    "journal_saved",
+    "journal_deleted",
 }
 
 _LEVELS = {"info": logging.INFO, "warning": logging.WARNING, "error": logging.ERROR}
@@ -45,6 +49,8 @@ _LOG_LABELS = {
     "api_error": ("Error", "Service request failed"),
     "rate_limit_triggered": ("System", "Rate limit reached"),
     "user_registered": ("Account", "New account created"),
+    "admin_registered": ("Account", "New administrator account created"),
+    "admin_registration_failed": ("Account", "Administrator sign-up refused: wrong code"),
     "user_login": ("Account", "User signed in"),
     "admin_login": ("Account", "Administrator signed in"),
     "login_failed": ("Account", "Sign-in attempt failed"),
@@ -60,6 +66,8 @@ _LOG_LABELS = {
     "memory_setting_changed": ("Memory", "User changed the memory setting"),
     "history_cleared": ("Session", "User deleted all conversations"),
     "history_exported": ("Session", "User downloaded their history"),
+    "journal_saved": ("Journal", "Journal entry saved"),
+    "journal_deleted": ("Journal", "Journal entry deleted"),
 }
 _STATUS = {"info": "OK", "warning": "Warning", "error": "Error"}
 

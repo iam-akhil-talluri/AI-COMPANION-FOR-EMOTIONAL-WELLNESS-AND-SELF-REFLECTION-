@@ -70,7 +70,7 @@ def screen(message: str, settings: Settings) -> SafetyResult:
         raise SafetyUnavailableError("safety_check_failed") from exc
 
 
-def _resource_kind(safety: SafetyResult) -> str:
+def resource_kind(safety: SafetyResult) -> str:
     if safety.risk_level == "high":
         return "abuse" if safety.primary_category == "abuse_disclosure" else "crisis"
     return RESOURCE_KIND.get(safety.primary_category or "", "support")
@@ -83,7 +83,7 @@ def _template_reply(safety: SafetyResult, events: list[SafetyEventRecord], actio
     return Reply(
         text=template(TEMPLATE_FOR.get(safety.primary_category or "", "crisis")),
         status=status, outcome=status, risk_level=safety.risk_level, categories=safety.categories,
-        resources=resources_for(_resource_kind(safety)), safety_checked=True, safety_events=tuple(events),
+        resources=resources_for(resource_kind(safety)), safety_checked=True, safety_events=tuple(events),
     )
 
 
@@ -133,7 +133,7 @@ def companion_reply(context: Sequence[dict], message: str, info: ReplyContext,
                   estimated_cost_usd=estimate_cost(result.prompt_tokens, result.completion_tokens, settings),
                   latency_ms=result.latency_ms)
     status = "support" if safety.escalated else "ok"
-    resources = resources_for(_resource_kind(safety)) if safety.escalated else []
+    resources = resources_for(resource_kind(safety)) if safety.escalated else []
     if RISK_ORDER[risk] >= RISK_ORDER["moderate"]:
         action = "ai_with_support_note" if safety.escalated else "ai_with_boundary_note"
         events.append(SafetyEventRecord("input", risk, safety.primary_category or "unknown", action, safety.source))

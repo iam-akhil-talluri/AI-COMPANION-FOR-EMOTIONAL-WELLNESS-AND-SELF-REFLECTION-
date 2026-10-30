@@ -9,10 +9,11 @@ IT 7993 Capstone, Fall 2026. Sponsor: Capgemini America, Inc. Team P05-01.
 
 ## What it does
 
-- **Pseudonymous accounts**: username + password only (Argon2id hashes, JWT sign-in). No email, real name or other personal information. Roles `user` and `admin`; the login screen's "Sign in as Administrator" checkbox is enforced by the server.
+- **Pseudonymous accounts**: username + password only (Argon2id hashes, JWT sign-in). No email, real name or other personal information. Roles `user` and `admin`; the login screen's "Sign in as Administrator" checkbox is enforced by the server. Administrators are created with `scripts/create_admin.py`, or from the sign-in page ("Create an administrator account") with the secret `ADMIN_REGISTRATION_CODE` (off when empty; wrong codes are rate-limited and logged). Administrator passwords need at least 12 characters either way.
 - **Conversation and reflection sessions**: create, list (own sessions only), open, delete, and send messages.
-- **Conversation memory**: messages are stored per session; the last `CONTEXT_MESSAGES` messages are passed to the reply provider with each new message. A retention job removes old text after `RETENTION_DAYS`.
+- **Conversation memory**: messages are stored per session; the last `CONTEXT_MESSAGES` (default 30, about 15 exchanges) messages are passed to the reply provider with each new message. A retention job removes old text after `RETENTION_DAYS`.
 - **Cross-session memory**: a short, safety-checked note per finished session; the newest notes from a user's other sessions go with each reply. On by default; users can turn it off and view or forget notes (`/api/memory`). Crisis sessions are never remembered.
+- **Journal**: private journal entries from Coping Tools (`/api/journal`), safety-checked when saved (support or crisis resources for risky writing), never read by the AI, included in the export and removed after `RETENTION_DAYS`.
 - **History**: filter by type, search titles and message text, paging (`X-Total-Count`), export as JSON (`GET /api/sessions/export`) and delete all (`DELETE /api/sessions`).
 - **Operational logging**: what happened (event type, level), never what anyone wrote. Admins read it at `GET /api/admin/logs`.
 - Rate limits, length limits, one error format, security headers, request IDs, Alembic migrations, health check, Docker image.
@@ -64,6 +65,9 @@ python -m uvicorn app.main:app --reload
 - API: http://127.0.0.1:8000, interactive docs: http://127.0.0.1:8000/docs
 - Health: http://127.0.0.1:8000/health
 
+After pulling new code, run `python -m alembic upgrade head` again. If you forget, the backend logs which migration the
+database is at and which one the code needs, and `/health` reports the database as "Not migrated".
+
 ## Tests and lint
 
 ```powershell
@@ -97,7 +101,7 @@ backend/
     config.py          every setting (environment variables / .env)
     errors.py          one error shape: {"code", "detail"}
     middleware.py      unexpected-error guard, request size limit, request IDs, security headers
-    api/               routes: auth, sessions (+ messages, export), memory, logs (admin), health
+    api/               routes: auth, sessions (+ messages, export), memory, journal, logs (admin), health
     services/          conversation_service, chat_service, memory_service, reply_provider, user_service, security,
                        rate_limiter, event_log, retention, health_service
     db/                SQLAlchemy models, UTC datetime type, engine/session

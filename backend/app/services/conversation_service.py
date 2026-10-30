@@ -1,5 +1,6 @@
 """Data access for sessions and messages."""
 
+import re
 from uuid import uuid4
 
 from sqlalchemy import delete, func, or_, select
@@ -10,6 +11,13 @@ from app.db.types import utc_now
 
 GENERIC_TITLES = {"conversation": "Conversation", "reflection": "Reflection"}
 _LIKE_ESCAPE = "!"
+# A bare greeting ("hi", "hey there!", "I'm back") says nothing about the conversation, so it never becomes the
+# History title; the next message does.
+_GREETING = re.compile(
+    r"^\s*((hi|hey|hello|hiya|yo|sup|what'?s up|howdy|good (morning|afternoon|evening)|i'?m back|hi again)"
+    r"( there| again| everyone)?[\s,.!?:)]*)+$",
+    re.IGNORECASE,
+)
 
 
 def create_session(db: Session, user_id: int, session_type: str = "conversation", title: str | None = None,
@@ -114,6 +122,10 @@ def default_title(text: str, max_words: int = 6, max_chars: int = 160) -> str:
     if len(words) > max_words:
         title += "..."
     return title[:max_chars]
+
+
+def is_greeting(text: str) -> bool:
+    return bool(_GREETING.match(text))
 
 
 def has_generic_title(conversation: ConversationSession) -> bool:

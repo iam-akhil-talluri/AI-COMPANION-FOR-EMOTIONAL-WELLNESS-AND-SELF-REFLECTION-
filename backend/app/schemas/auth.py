@@ -17,6 +17,9 @@ class RegisterRequest(BaseModel):
                           "Choose a name that does not identify you.",
                           json_schema_extra={"pattern": USERNAME_PATTERN.pattern})
     password: str = Field(json_schema_extra={"minLength": MIN_PASSWORD_LENGTH, "maxLength": MAX_PASSWORD_LENGTH})
+    # Create an administrator account. Needs `admin_code` to match ADMIN_REGISTRATION_CODE.
+    admin: bool = False
+    admin_code: str | None = Field(default=None, max_length=200)
 
     @field_validator("username")
     @classmethod

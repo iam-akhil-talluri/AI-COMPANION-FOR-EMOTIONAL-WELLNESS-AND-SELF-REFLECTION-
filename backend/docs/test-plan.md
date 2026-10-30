@@ -23,7 +23,8 @@ From: Akhil (backend, database, repository setup, sessions and conversation memo
 | Safety screening and AI replies | Emmanuel | Message flow with a stand-in reply source (scratch folder only); failing reply source; no reply source |
 | Crisis / support routing, Safety Check Unavailable | Emmanuel | Static screens reachable and render; links present |
 | My Insights, admin statistics, cost card | Korey | Screens render without errors using sample data |
-| Journal, coping tools | Not assigned | Exercises work in the browser; nothing is sent to the backend |
+| Journal | Akhil | Saved, listed and deleted through `/api/journal`; safety-checked |
+| Breathing and grounding | Not assigned | Exercises work in the browser; nothing is sent to the backend |
 | AWS deployment | Shaheed | Not tested (no AWS access) |
 
 ## 2. Test environment
@@ -68,6 +69,7 @@ From: Akhil (backend, database, repository setup, sessions and conversation memo
 | API-06 | Register invalid username / short password | 422 `validation_error` |
 | API-07 | Login correct / wrong password / unknown user | 200 / 401 / 401 with identical message |
 | API-08 | Login with `admin: true` as normal user / as admin | 403 `admin_required` / 200 role `admin` |
+| API-08a | Register with `admin: true`: right code / wrong code / no code set on server / 6th wrong code | 201 role `admin` / 403 `invalid_admin_code` / 403 `admin_registration_disabled` / 429 |
 | API-09 | 5 failed logins then a 6th | 6th is 429 `rate_limited` |
 | API-10 | `GET /api/auth/me` with valid / missing / garbage token | 200 / 401 `not_authenticated` / 401 `session_expired` |
 | API-11 | Logout, then reuse the old token | 204, then 401 |
@@ -184,7 +186,14 @@ From: Akhil (backend, database, repository setup, sessions and conversation memo
 | OT-02 | Failing reply provider | 503, nothing saved (BA-01) |
 | OT-03 | Support bar → Support & Crisis Resources; Safety Check Unavailable screen renders | Static content and links present |
 | OT-04 | My Insights and admin sample cards render | No errors |
-| OT-05 | Coping tools: breathing, journal, grounding | Work locally; no backend calls |
+| OT-05 | Coping tools: breathing, grounding | Work locally; no backend calls |
+| JN-01 | Save an entry (multi-line); reload | Saved, newest first, line breaks kept, still there after reload |
+| JN-02 | Empty / 5,001 characters / not signed in | Save disabled; 422 `message_too_long`; 401 |
+| JN-03 | Elevated entry / high-risk entry | Saved; support resources under the form / crisis screen, Go Back to Coping Tools |
+| JN-04 | Another user lists or deletes my entry | Empty list / 404 |
+| JN-05 | Delete, Show more (5 per page), export, My Insights count | Correct |
+| JN-06 | No AI call; logs and analytics contain no journal text; escalations counted | As described |
+| JN-07 | Moderation down; network down; 31st entry in an hour; retention | Saved with rules; text kept with an error; 429; old entries deleted |
 
 ## 5. Entry and exit criteria
 

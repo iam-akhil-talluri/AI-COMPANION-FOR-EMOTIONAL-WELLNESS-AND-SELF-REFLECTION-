@@ -14,16 +14,14 @@ import sys
 
 from app.db.session import get_sessionmaker
 from app.services.user_service import (
+    ADMIN_MIN_PASSWORD_LENGTH,
     MAX_PASSWORD_LENGTH,
-    MIN_PASSWORD_LENGTH,
     USERNAME_PATTERN,
     UsernameTakenError,
     create_user,
     find_user,
     set_password,
 )
-
-ADMIN_MIN_PASSWORD_LENGTH = max(MIN_PASSWORD_LENGTH, 12)
 
 
 def _read_password(env_name: str | None) -> str:

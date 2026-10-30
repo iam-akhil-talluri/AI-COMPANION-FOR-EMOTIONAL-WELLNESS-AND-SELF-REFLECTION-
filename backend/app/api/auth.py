@@ -1,7 +1,11 @@
 """Account registration, sign-in and sign-out.
 
 A sign-in request with `admin: true` is refused unless the account has the admin role.
+A registration with `admin: true` creates an administrator only with the correct
+ADMIN_REGISTRATION_CODE; without that setting, admins are created with scripts/create_admin.py.
 """
+
+import secrets
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.orm import Session
@@ -16,7 +20,14 @@ from app.schemas.auth import AuthResponse, LoginRequest, RegisterRequest, UserOu
 from app.services.event_log import log_event
 from app.services.rate_limiter import limiter
 from app.services.security import create_access_token
-from app.services.user_service import UsernameTakenError, authenticate, create_user, revoke_tokens, username_key
+from app.services.user_service import (
+    ADMIN_MIN_PASSWORD_LENGTH,
+    UsernameTakenError,
+    authenticate,
+    create_user,
+    revoke_tokens,
+    username_key,
+)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -25,10 +36,31 @@ LOGIN_FAILURES_PER_ACCOUNT = 5
 LOGIN_FAILURES_PER_IP = 20
 LOGIN_WINDOW_SECONDS = 15 * 60
 REGISTRATIONS_PER_IP_PER_HOUR = 10
+# Wrong administrator codes per IP per 15-minute window.
+ADMIN_CODE_FAILURES_PER_IP = 5
 
 _TOO_MANY = "Too many sign-in attempts. Please wait a few minutes and try again."
 _INVALID = "Sign-in was not successful. Check your username and password."
 _NOT_ADMIN = "Administrator sign-in was not successful"
+_ADMIN_SIGNUP_OFF = "Administrator accounts can't be created here. Ask the project team for access."
+_BAD_ADMIN_CODE = "That administrator code is not correct."
+_SHORT_ADMIN_PASSWORD = f"Administrator passwords must be at least {ADMIN_MIN_PASSWORD_LENGTH} characters."
+
+
+def _check_admin_code(code: str | None, request: Request, db: Session) -> None:
+    """Allow an admin registration only with the configured code. Wrong codes are rate-limited and logged."""
+    settings = get_settings()
+    if not settings.admin_registration_enabled:
+        raise AppError("admin_registration_disabled", 403, _ADMIN_SIGNUP_OFF)
+    key = f"admin-code-fail:{client_ip(request)}"
+    if not limiter.peek_all([(key, ADMIN_CODE_FAILURES_PER_IP, LOGIN_WINDOW_SECONDS)]):
+        raise AppError("rate_limited", 429, _TOO_MANY, headers={"Retry-After": str(LOGIN_WINDOW_SECONDS)})
+    expected = settings.admin_registration_code.strip().encode()
+    if not secrets.compare_digest((code or "").strip().encode(), expected):
+        limiter.record([key])
+        log_event(db, "admin_registration_failed", level="warning")
+        db.commit()
+        raise AppError("invalid_admin_code", 403, _BAD_ADMIN_CODE)
 
 
 def _auth_response(user: User) -> AuthResponse:
@@ -44,11 +76,16 @@ def register(body: RegisterRequest, request: Request, db: Session = Depends(get_
         raise AppError("registration_disabled", 403, "New accounts can't be created right now.")
     if not limiter.allow(f"register:{client_ip(request)}", REGISTRATIONS_PER_IP_PER_HOUR, 3600):
         raise AppError("rate_limited", 429, "Too many new accounts from this network. Please try again later.")
+    if body.admin:
+        # Same rule as scripts/create_admin.py. Checked first so a short password doesn't use up a code attempt.
+        if len(body.password) < ADMIN_MIN_PASSWORD_LENGTH:
+            raise AppError("validation_error", 422, _SHORT_ADMIN_PASSWORD)
+        _check_admin_code(body.admin_code, request, db)
     try:
-        user = create_user(db, body.username, body.password)
+        user = create_user(db, body.username, body.password, role="admin" if body.admin else "user")
     except UsernameTakenError:
         raise AppError("username_taken", 409, "That username is taken. Please choose another.") from None
-    log_event(db, "user_registered")
+    log_event(db, "admin_registered" if body.admin else "user_registered", level="warning" if body.admin else "info")
     db.commit()
     return _auth_response(user)
 

@@ -24,6 +24,7 @@ from app.services.conversation_service import (
     add_message,
     default_title,
     has_generic_title,
+    is_greeting,
     recent_context,
     touch_session,
 )
@@ -166,8 +167,8 @@ def send_message(db: Session, conversation: ConversationSession, message: str,
     if settings.store_transcripts:
         add_message(db, session_id, "user", text)
         add_message(db, session_id, "assistant", reply.text)
-        # A message that was escalated never becomes the visible session title.
-        if has_generic_title(conversation) and reply.status == "ok":
+        # A message that was escalated, or a bare greeting, never becomes the visible session title.
+        if has_generic_title(conversation) and reply.status == "ok" and not is_greeting(text):
             conversation.title = default_title(text)
     if not conversation.title:
         conversation.title = GENERIC_TITLES.get(conversation.type, "Conversation")

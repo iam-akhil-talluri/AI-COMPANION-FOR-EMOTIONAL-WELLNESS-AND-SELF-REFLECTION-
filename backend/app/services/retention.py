@@ -1,7 +1,7 @@
 """Data retention.
 
-Deletes transcript text (and the session's memory note) older than RETENTION_DAYS and empty
-sessions older than EMPTY_SESSION_GRACE. Session metadata is kept.
+Deletes transcript text (and the session's memory note) and journal entries older than
+RETENTION_DAYS, and empty sessions older than EMPTY_SESSION_GRACE. Session metadata is kept.
 """
 
 import asyncio
@@ -12,7 +12,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.config import Settings
-from app.db.models import ConversationSession, Message
+from app.db.models import ConversationSession, JournalEntry, Message
 from app.db.session import get_sessionmaker
 from app.db.types import utc_now
 from app.services.event_log import log_event
@@ -44,10 +44,12 @@ def purge_expired(db: Session, retention_days: int) -> int:
         removed += db.execute(delete(Message).where(Message.session_id.in_(batch))).rowcount or 0
         db.execute(update(ConversationSession).where(ConversationSession.id.in_(batch))
                    .values(transcript_purged_at=now, summary=None, summary_updated_at=None))
-    if removed or expired or empty:
-        log_event(db, "retention_purge", detail=f"rows={removed} sessions={len(expired)} empty_sessions={empty}")
+    journal = db.execute(delete(JournalEntry).where(JournalEntry.created_at < cutoff)).rowcount or 0
+    if removed or expired or empty or journal:
+        log_event(db, "retention_purge",
+                  detail=f"rows={removed} sessions={len(expired)} empty_sessions={empty} journal_entries={journal}")
     db.commit()
-    return removed + empty
+    return removed + empty + journal
 
 
 def _purge_once(retention_days: int) -> None:

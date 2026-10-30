@@ -13,6 +13,8 @@ from app.services.security import hash_password, password_needs_rehash, verify_p
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,31}$")
 MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_LENGTH = 128
+# Administrator accounts see every user's usage figures, so they need a longer password.
+ADMIN_MIN_PASSWORD_LENGTH = 12
 
 
 class UsernameTakenError(Exception):

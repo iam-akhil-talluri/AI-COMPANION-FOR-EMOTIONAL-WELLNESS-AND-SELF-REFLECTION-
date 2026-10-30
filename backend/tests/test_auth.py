@@ -170,3 +170,74 @@ def test_deleted_user_token_is_rejected(client, auth, db_session):
     db_session.delete(db_session.scalar(select(User)))
     db_session.commit()
     assert client.get("/api/auth/me", headers=auth).status_code == 401
+
+
+# --- Administrator accounts from the sign-in page --------------------------------------
+
+ADMIN_CODE = "team-admin-code-2026"
+
+
+def register_admin(client, code, username="new-admin"):
+    return client.post("/api/auth/register", json={"username": username, "password": PASSWORD,
+                                                   "admin": True, "admin_code": code})
+
+
+@pytest.fixture
+def admin_code(monkeypatch):
+    monkeypatch.setattr(get_settings(), "admin_registration_code", ADMIN_CODE)
+    return ADMIN_CODE
+
+
+def test_admin_registration_with_the_code(client, db_session, admin_code):
+    response = register_admin(client, admin_code)
+    assert response.status_code == 201
+    assert response.json()["user"]["role"] == "admin"
+    headers = {"Authorization": f"Bearer {response.json()['token']}"}
+    assert client.get("/api/admin/analytics", headers=headers).status_code == 200
+    assert login(client, "new-admin", admin=True).status_code == 200
+    log = db_session.scalar(select(EventLog).where(EventLog.event_type == "admin_registered"))
+    assert log.level == "warning"
+
+
+def test_admin_registration_with_a_wrong_or_missing_code(client, db_session, admin_code):
+    for code in ("wrong-code-123456", "", None):
+        response = register_admin(client, code)
+        assert response.status_code == 403 and response.json()["code"] == "invalid_admin_code"
+    assert db_session.scalar(select(User).where(User.username == "new-admin")) is None
+    assert db_session.scalar(select(EventLog).where(EventLog.event_type == "admin_registration_failed")) is not None
+
+
+def test_admin_registration_is_off_without_a_configured_code(client, db_session):
+    response = register_admin(client, "anything-at-all")
+    assert response.status_code == 403 and response.json()["code"] == "admin_registration_disabled"
+    assert db_session.scalar(select(User).where(User.username == "new-admin")) is None
+
+
+def test_wrong_admin_codes_are_rate_limited(client, admin_code):
+    for _ in range(5):
+        assert register_admin(client, "wrong-code-123456").status_code == 403
+    response = register_admin(client, admin_code)  # even the right code, until the window passes
+    assert response.status_code == 429 and response.json()["code"] == "rate_limited"
+
+
+def test_admin_code_never_makes_a_normal_registration_an_admin(client, admin_code):
+    response = client.post("/api/auth/register", json={"username": "plain-user", "password": PASSWORD,
+                                                        "admin_code": admin_code})
+    assert response.status_code == 201 and response.json()["user"]["role"] == "user"
+
+
+def test_admin_registration_needs_a_12_character_password(client, db_session, admin_code):
+    """Same rule as scripts/create_admin.py, and a short password doesn't use up a code attempt."""
+    for _ in range(6):
+        response = client.post("/api/auth/register", json={"username": "new-admin", "password": "only-11-chr",
+                                                            "admin": True, "admin_code": admin_code})
+        assert response.status_code == 422 and "at least 12 characters" in response.json()["detail"]
+    assert db_session.scalar(select(User).where(User.username == "new-admin")) is None
+    assert register_admin(client, admin_code).status_code == 201  # not rate-limited by the attempts above
+
+
+def test_short_admin_code_is_rejected_at_startup():
+    from app.config import Settings
+
+    with pytest.raises(ValueError, match="ADMIN_REGISTRATION_CODE"):
+        Settings(ADMIN_REGISTRATION_CODE="short")

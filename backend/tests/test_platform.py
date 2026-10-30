@@ -44,6 +44,56 @@ def test_health_is_503_when_migrations_have_not_run():
     assert {s["name"]: s["status"] for s in body["services"]}["Database"] == "Not migrated"
 
 
+def _db_at_revision(revision: str):
+    """An in-memory database with every table, stamped at the given migration."""
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.orm import Session
+    from sqlalchemy.pool import StaticPool
+
+    from app.db.models import Base
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
+        connection.execute(text("INSERT INTO alembic_version VALUES (:v)"), {"v": revision})
+    return engine, Session(engine)
+
+
+def test_health_is_503_when_the_database_is_behind_the_migrations():
+    """A migration that only adds columns (like 0003) leaves every table in place; the version still shows it."""
+    from app.services.health_service import head_revision, service_health
+
+    assert head_revision() == "0004"
+    engine, db = _db_at_revision("0002")
+    with db:
+        body = service_health(db)
+    engine.dispose()
+    assert body["status"] == "unhealthy"
+    assert {s["name"]: s["status"] for s in body["services"]}["Database"] == "Not migrated"
+
+
+def test_health_is_healthy_at_the_latest_migration():
+    from app.services.health_service import head_revision, service_health
+
+    engine, db = _db_at_revision(head_revision())
+    with db:
+        body = service_health(db)
+    engine.dispose()
+    assert body["status"] == "healthy"
+
+
+def test_startup_says_how_to_fix_an_outdated_database(caplog):
+    from app.services.health_service import log_schema_problems
+
+    engine, db = _db_at_revision("0002")
+    with db, caplog.at_level("ERROR"):
+        log_schema_problems(db)
+    engine.dispose()
+    assert "at migration 0002 but the code needs 0004" in caplog.text
+    assert "alembic upgrade head" in caplog.text
+
+
 def test_every_error_has_code_and_detail(client, auth):
     not_found = client.get("/api/sessions/missing", headers=auth).json()
     unknown_route = client.get("/api/nope").json()
