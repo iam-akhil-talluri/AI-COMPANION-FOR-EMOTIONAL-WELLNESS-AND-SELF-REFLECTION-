@@ -840,11 +840,7 @@ function App() {
                 // React → FastAPI → Safety/Moderation → clear/concern/error
                 // ============================================================
                 try {
-                  const response = await sendMessageToBackend(
-                    userMessage,
-                    sessionId,
-                    messages
-                  )
+                  const response = await sendMessageToBackend(userMessage)
 
                   setSafetyChecking(false)
                   setSafetyStatus(response.status)
@@ -1114,16 +1110,8 @@ function App() {
                 }
 
                 try {
-                  // The reflection chat keeps its own backend history,
-                  // separate from the session's main conversation.
                   const response =
-                    await sendMessageToBackend(
-                      userMessage,
-                      selectedSession
-                        ? `${selectedSession.id}-reflection`
-                        : null,
-                      reflectionMessages
-                    )
+                    await sendMessageToBackend(userMessage)
 
                   if (response.status === 'concern') {
                     setCurrentScreen('support-resources')
@@ -2534,11 +2522,7 @@ function App() {
 
                 try {
                   const response =
-                    await sendMessageToBackend(
-                      userMessage,
-                      selectedSession ? selectedSession.id : null,
-                      continueMessages
-                    )
+                    await sendMessageToBackend(userMessage)
 
                   if (response.status === 'concern') {
                     setCurrentScreen('support-resources')

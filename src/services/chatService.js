@@ -1,36 +1,49 @@
 /*
   FRONTEND SERVICE
 
-  Sends chat messages to the FastAPI backend (POST /chat).
+  This file simulates the response from our future FastAPI backend.
+  Later, we will replace this mock function with a real API request.
 
-  The backend is responsible for safety screening,
+  The backend will be responsible for safety screening,
   scope classification, and generating wellness responses.
-  It returns { status, message, session_id } where status is
-  'ok' | 'out_of_scope' | 'concern' | 'error'.
 */
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+export async function sendMessageToBackend(userMessage) {
+  // MOCK ONLY: Simulate a short backend response delay.
+  await new Promise((resolve) => setTimeout(resolve, 500))
 
-// sessionId: keeps the conversation's history together on the backend.
-// history: messages already shown in this chat ({ role, text }), so the
-// backend can pick up a restored session it has not seen before.
-export async function sendMessageToBackend(userMessage, sessionId = null, history = []) {
-  const response = await fetch(`${API_URL}/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message: userMessage,
-      session_id: sessionId === null ? null : String(sessionId),
-      history
-    })
-  })
+  const text = userMessage.toLowerCase()
 
-  if (!response.ok) {
+  // MOCK TEST: A direct recipe request is out of scope.
+  if (
+    text.includes('recipe') ||
+    text.includes('how do i cook')
+  ) {
     return {
-      status: 'error',
-      message: 'Sorry, I could not respond just now. Please try again.'
+      status: 'out_of_scope',
+      message:
+        "I'm here to support emotional wellness, self-reflection, and coping strategies. I can't help with recipes, but we could explore how you're feeling."
     }
   }
 
-  return response.json()
+  // MOCK TEST: An emotional message mentioning food stays in scope.
+  if (
+    text.includes('stressed') ||
+    text.includes('stress') ||
+    text.includes('upset') ||
+    text.includes('sad')
+  ) {
+    return {
+      status: 'ok',
+      message:
+        "It sounds like you're feeling stressed. Would you like to talk about what's making today difficult?"
+    }
+  }
+
+  // MOCK DEFAULT: Replace this with the real AI response.
+  return {
+    status: 'ok',
+    message:
+      'What has been on your mind today?'
+  }
 }
