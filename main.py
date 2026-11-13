@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, field_validator
 
 BASE_DIR = Path(__file__).parent
 DATA_FILE = BASE_DIR / "data.json"
-INDEX_FILE = BASE_DIR / "index.html"
+INDEX_FILE = BASE_DIR / "companions.html"
 
 app = FastAPI(title="Companion AI", description="CRUD API for AI companions")
 

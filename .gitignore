@@ -25,3 +25,6 @@ dist-ssr
 
 src/App_complete.jsx
 src/App_full_working.jsx
+
+# Companion CRUD server storage
+data.json

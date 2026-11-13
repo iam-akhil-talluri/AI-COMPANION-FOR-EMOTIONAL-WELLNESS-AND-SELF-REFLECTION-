@@ -1,4 +1,4 @@
-// Companion AI CRUD server — no dependencies. Run: node server.js
+// Companion AI CRUD server — no dependencies. Run: node server.cjs
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -6,7 +6,7 @@ const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join(__dirname, 'data.json');
-const INDEX_FILE = path.join(__dirname, 'index.html');
+const INDEX_FILE = path.join(__dirname, 'companions.html');
 
 // ---- Storage (JSON file) ----
 function load() {
@@ -54,7 +54,7 @@ const server = http.createServer(async (req, res) => {
   const match = url.pathname.match(/^\/api\/companions(?:\/([\w-]+))?\/?$/);
 
   try {
-    if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
+    if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/companions.html')) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       return fs.createReadStream(INDEX_FILE).pipe(res);
     }
