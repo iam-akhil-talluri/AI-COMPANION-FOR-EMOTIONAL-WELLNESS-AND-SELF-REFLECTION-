@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -20,6 +21,16 @@ class Settings(BaseSettings):
     rag_top_k: int = 3
     # Passages scoring below this cosine similarity are not given to the model.
     rag_min_score: float = 0.30
+
+    # Where passages come from: "local" (embeddings in rag_index.json, app/rag.py)
+    # or "openai_file_search" (a hosted OpenAI vector store, app/file_search.py).
+    rag_backend: Literal["local", "openai_file_search"] = "local"
+    # Leave empty to use the store created by `python -m app.file_search sync`.
+    openai_vector_store_id: str = ""
+    vector_store_state_path: Path = BACKEND_DIR / "data" / "vector_store.json"
+    # File Search scores use a different scale from the local cosine scores,
+    # so they get their own threshold (calibrated with app/eval_retrieval.py).
+    file_search_min_score: float = 0.40
 
     cors_origins: str = "http://localhost:5173"
 

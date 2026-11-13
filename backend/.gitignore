@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 .pytest_cache/
 data/rag_index.json
+data/vector_store.json

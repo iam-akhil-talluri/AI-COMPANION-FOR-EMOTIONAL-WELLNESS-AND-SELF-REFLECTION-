@@ -12,6 +12,9 @@ Each chunk in the index uses this shape (see app/js.js):
 
 The index is rebuilt automatically when the knowledge base or embedding model
 changes. Rebuild it by hand with:  python -m app.ingest
+
+With RAG_BACKEND=openai_file_search, step 2 uses OpenAI File Search instead
+(see app/file_search.py); steps 1 and 3 are unchanged for the caller.
 """
 
 import asyncio
@@ -179,6 +182,9 @@ def rank_chunks(query_vec: list[float], chunks: list[dict[str, Any]], top_k: int
 async def retrieve(query: str) -> list[RetrievedChunk]:
     """Return the most relevant approved passages for the user's message."""
     settings = get_settings()
+    if settings.rag_backend == "openai_file_search":
+        from . import file_search  # imported here: file_search imports this module
+        return await file_search.search(query)
     try:
         index = await get_index()
         if not index["chunks"]:

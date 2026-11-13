@@ -1,0 +1,731 @@
+[
+  {
+    "backend": "local",
+    "topK": 3,
+    "threshold": 0.3,
+    "summary": {
+      "hitAt1": 0.9,
+      "hitAt3": 0.9,
+      "mrr": 0.9,
+      "meanScoreOfCorrectDoc": 0.4484,
+      "minScoreOfCorrectDoc": 0.3246,
+      "negativesWithAnyResult": 0,
+      "maxNegativeTopScore": null,
+      "meanNegativeTopScore": null
+    },
+    "queries": [
+      {
+        "query": "My heart races and I can't catch my breath when I get anxious",
+        "expected": "wellness-001",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-001",
+            "score": 0.505
+          },
+          {
+            "documentId": "wellness-004",
+            "score": 0.3297
+          }
+        ]
+      },
+      {
+        "query": "Is there a quick way to calm my body down before a presentation?",
+        "expected": "wellness-001",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-001",
+            "score": 0.4519
+          },
+          {
+            "documentId": "wellness-004",
+            "score": 0.4513
+          },
+          {
+            "documentId": "wellness-002",
+            "score": 0.4378
+          }
+        ]
+      },
+      {
+        "query": "My thoughts are spiralling and I feel disconnected from everything around me",
+        "expected": "wellness-002",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-002",
+            "score": 0.3246
+          },
+          {
+            "documentId": "wellness-003",
+            "score": 0.3203
+          }
+        ]
+      },
+      {
+        "query": "How do I bring myself back to the present when I'm overwhelmed?",
+        "expected": "wellness-002",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-002",
+            "score": 0.539
+          },
+          {
+            "documentId": "wellness-004",
+            "score": 0.3849
+          },
+          {
+            "documentId": "wellness-001",
+            "score": 0.3762
+          }
+        ]
+      },
+      {
+        "query": "What could I write about to understand my feelings better?",
+        "expected": "wellness-003",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-003",
+            "score": 0.5559
+          },
+          {
+            "documentId": "wellness-009",
+            "score": 0.4507
+          },
+          {
+            "documentId": "wellness-008",
+            "score": 0.3961
+          }
+        ]
+      },
+      {
+        "query": "I want to start a diary but I don't know what to say",
+        "expected": "wellness-003",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-003",
+            "score": 0.4829
+          },
+          {
+            "documentId": "wellness-008",
+            "score": 0.3005
+          }
+        ]
+      },
+      {
+        "query": "I have finals next week and I'm panicking about revision",
+        "expected": "wellness-004",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-004",
+            "score": 0.5341
+          }
+        ]
+      },
+      {
+        "query": "I can't focus on studying because I'm so worried about failing",
+        "expected": "wellness-004",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-004",
+            "score": 0.5355
+          }
+        ]
+      },
+      {
+        "query": "I keep lying awake at night with my mind racing",
+        "expected": "wellness-005",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-005",
+            "score": 0.3705
+          }
+        ]
+      },
+      {
+        "query": "Being tired all the time makes me so irritable",
+        "expected": "wellness-005",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-005",
+            "score": 0.3483
+          }
+        ]
+      },
+      {
+        "query": "I moved to a new city and I don't have anyone to talk to",
+        "expected": "wellness-006",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-006",
+            "score": 0.364
+          },
+          {
+            "documentId": "wellness-008",
+            "score": 0.3322
+          }
+        ]
+      },
+      {
+        "query": "Even when I'm with people I feel completely alone",
+        "expected": "wellness-006",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-006",
+            "score": 0.4632
+          },
+          {
+            "documentId": "wellness-008",
+            "score": 0.3301
+          }
+        ]
+      },
+      {
+        "query": "I'm always so hard on myself when I make a mistake",
+        "expected": "wellness-007",
+        "rank": null,
+        "retrieved": []
+      },
+      {
+        "query": "My inner critic never stops telling me I'm not good enough",
+        "expected": "wellness-007",
+        "rank": null,
+        "retrieved": []
+      },
+      {
+        "query": "Should I talk to a counsellor about how I've been feeling?",
+        "expected": "wellness-008",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-008",
+            "score": 0.5437
+          },
+          {
+            "documentId": "wellness-003",
+            "score": 0.3848
+          },
+          {
+            "documentId": "wellness-004",
+            "score": 0.3545
+          }
+        ]
+      },
+      {
+        "query": "I don't know how to tell my friend that I'm struggling",
+        "expected": "wellness-008",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-008",
+            "score": 0.4254
+          },
+          {
+            "documentId": "wellness-007",
+            "score": 0.3072
+          }
+        ]
+      },
+      {
+        "query": "I feel bad but I can't even say what the feeling is",
+        "expected": "wellness-009",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-009",
+            "score": 0.376
+          }
+        ]
+      },
+      {
+        "query": "Why do I get angry so suddenly? What is it telling me?",
+        "expected": "wellness-009",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-009",
+            "score": 0.3965
+          },
+          {
+            "documentId": "wellness-010",
+            "score": 0.3168
+          },
+          {
+            "documentId": "wellness-003",
+            "score": 0.316
+          }
+        ]
+      },
+      {
+        "query": "My partner and I keep arguing about the same things",
+        "expected": "wellness-010",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-010",
+            "score": 0.3851
+          }
+        ]
+      },
+      {
+        "query": "How can I talk to my roommate about a disagreement without it blowing up?",
+        "expected": "wellness-010",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-010",
+            "score": 0.4701
+          }
+        ]
+      }
+    ],
+    "negatives": [
+      {
+        "query": "What's the capital of Australia?",
+        "retrieved": []
+      },
+      {
+        "query": "Write me a Python function to reverse a list",
+        "retrieved": []
+      },
+      {
+        "query": "Give me a recipe for banana bread",
+        "retrieved": []
+      },
+      {
+        "query": "Who won the football match last night?",
+        "retrieved": []
+      },
+      {
+        "query": "hi",
+        "retrieved": []
+      }
+    ]
+  },
+  {
+    "backend": "openai_file_search",
+    "topK": 3,
+    "threshold": 0.4,
+    "summary": {
+      "hitAt1": 0.85,
+      "hitAt3": 1.0,
+      "mrr": 0.925,
+      "meanScoreOfCorrectDoc": 0.7589,
+      "minScoreOfCorrectDoc": 0.5413,
+      "negativesWithAnyResult": 1,
+      "maxNegativeTopScore": 0.7716,
+      "meanNegativeTopScore": 0.7716
+    },
+    "queries": [
+      {
+        "query": "My heart races and I can't catch my breath when I get anxious",
+        "expected": "wellness-001",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-001",
+            "score": 0.8661
+          },
+          {
+            "documentId": "wellness-002",
+            "score": 0.8207
+          },
+          {
+            "documentId": "wellness-004",
+            "score": 0.547
+          }
+        ]
+      },
+      {
+        "query": "Is there a quick way to calm my body down before a presentation?",
+        "expected": "wellness-001",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-001",
+            "score": 0.8798
+          },
+          {
+            "documentId": "wellness-002",
+            "score": 0.8361
+          },
+          {
+            "documentId": "wellness-007",
+            "score": 0.5862
+          }
+        ]
+      },
+      {
+        "query": "My thoughts are spiralling and I feel disconnected from everything around me",
+        "expected": "wellness-002",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-002",
+            "score": 0.8618
+          },
+          {
+            "documentId": "wellness-003",
+            "score": 0.7525
+          },
+          {
+            "documentId": "wellness-001",
+            "score": 0.7046
+          }
+        ]
+      },
+      {
+        "query": "How do I bring myself back to the present when I'm overwhelmed?",
+        "expected": "wellness-002",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-002",
+            "score": 0.9298
+          },
+          {
+            "documentId": "wellness-001",
+            "score": 0.898
+          },
+          {
+            "documentId": "wellness-003",
+            "score": 0.7792
+          }
+        ]
+      },
+      {
+        "query": "What could I write about to understand my feelings better?",
+        "expected": "wellness-003",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-003",
+            "score": 0.9088
+          },
+          {
+            "documentId": "wellness-010",
+            "score": 0.7586
+          },
+          {
+            "documentId": "wellness-009",
+            "score": 0.7547
+          }
+        ]
+      },
+      {
+        "query": "I want to start a diary but I don't know what to say",
+        "expected": "wellness-003",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-003",
+            "score": 0.8511
+          },
+          {
+            "documentId": "wellness-009",
+            "score": 0.4229
+          }
+        ]
+      },
+      {
+        "query": "I have finals next week and I'm panicking about revision",
+        "expected": "wellness-004",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-004",
+            "score": 0.8002
+          },
+          {
+            "documentId": "wellness-001",
+            "score": 0.5242
+          }
+        ]
+      },
+      {
+        "query": "I can't focus on studying because I'm so worried about failing",
+        "expected": "wellness-004",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-004",
+            "score": 0.8616
+          },
+          {
+            "documentId": "wellness-002",
+            "score": 0.7372
+          },
+          {
+            "documentId": "wellness-001",
+            "score": 0.6736
+          }
+        ]
+      },
+      {
+        "query": "I keep lying awake at night with my mind racing",
+        "expected": "wellness-005",
+        "rank": 2,
+        "retrieved": [
+          {
+            "documentId": "wellness-002",
+            "score": 0.8221
+          },
+          {
+            "documentId": "wellness-005",
+            "score": 0.6716
+          },
+          {
+            "documentId": "wellness-001",
+            "score": 0.661
+          }
+        ]
+      },
+      {
+        "query": "Being tired all the time makes me so irritable",
+        "expected": "wellness-005",
+        "rank": 2,
+        "retrieved": [
+          {
+            "documentId": "wellness-002",
+            "score": 0.6717
+          },
+          {
+            "documentId": "wellness-005",
+            "score": 0.6608
+          },
+          {
+            "documentId": "wellness-001",
+            "score": 0.5111
+          }
+        ]
+      },
+      {
+        "query": "I moved to a new city and I don't have anyone to talk to",
+        "expected": "wellness-006",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-006",
+            "score": 0.7636
+          },
+          {
+            "documentId": "wellness-008",
+            "score": 0.6772
+          },
+          {
+            "documentId": "wellness-010",
+            "score": 0.5033
+          }
+        ]
+      },
+      {
+        "query": "Even when I'm with people I feel completely alone",
+        "expected": "wellness-006",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-006",
+            "score": 0.7324
+          },
+          {
+            "documentId": "wellness-008",
+            "score": 0.6368
+          },
+          {
+            "documentId": "wellness-002",
+            "score": 0.5771
+          }
+        ]
+      },
+      {
+        "query": "I'm always so hard on myself when I make a mistake",
+        "expected": "wellness-007",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-007",
+            "score": 0.6642
+          },
+          {
+            "documentId": "wellness-002",
+            "score": 0.5255
+          },
+          {
+            "documentId": "wellness-010",
+            "score": 0.4708
+          }
+        ]
+      },
+      {
+        "query": "My inner critic never stops telling me I'm not good enough",
+        "expected": "wellness-007",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-007",
+            "score": 0.626
+          },
+          {
+            "documentId": "wellness-002",
+            "score": 0.527
+          },
+          {
+            "documentId": "wellness-004",
+            "score": 0.5
+          }
+        ]
+      },
+      {
+        "query": "Should I talk to a counsellor about how I've been feeling?",
+        "expected": "wellness-008",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-008",
+            "score": 0.8202
+          },
+          {
+            "documentId": "wellness-010",
+            "score": 0.7203
+          },
+          {
+            "documentId": "wellness-001",
+            "score": 0.6969
+          }
+        ]
+      },
+      {
+        "query": "I don't know how to tell my friend that I'm struggling",
+        "expected": "wellness-008",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-008",
+            "score": 0.6731
+          },
+          {
+            "documentId": "wellness-010",
+            "score": 0.6108
+          },
+          {
+            "documentId": "wellness-007",
+            "score": 0.602
+          }
+        ]
+      },
+      {
+        "query": "I feel bad but I can't even say what the feeling is",
+        "expected": "wellness-009",
+        "rank": 2,
+        "retrieved": [
+          {
+            "documentId": "wellness-003",
+            "score": 0.6207
+          },
+          {
+            "documentId": "wellness-009",
+            "score": 0.5413
+          },
+          {
+            "documentId": "wellness-002",
+            "score": 0.5295
+          }
+        ]
+      },
+      {
+        "query": "Why do I get angry so suddenly? What is it telling me?",
+        "expected": "wellness-009",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-009",
+            "score": 0.602
+          },
+          {
+            "documentId": "wellness-010",
+            "score": 0.4975
+          },
+          {
+            "documentId": "wellness-001",
+            "score": 0.497
+          }
+        ]
+      },
+      {
+        "query": "My partner and I keep arguing about the same things",
+        "expected": "wellness-010",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-010",
+            "score": 0.7263
+          }
+        ]
+      },
+      {
+        "query": "How can I talk to my roommate about a disagreement without it blowing up?",
+        "expected": "wellness-010",
+        "rank": 1,
+        "retrieved": [
+          {
+            "documentId": "wellness-010",
+            "score": 0.7375
+          },
+          {
+            "documentId": "wellness-008",
+            "score": 0.4415
+          },
+          {
+            "documentId": "wellness-009",
+            "score": 0.4327
+          }
+        ]
+      }
+    ],
+    "negatives": [
+      {
+        "query": "What's the capital of Australia?",
+        "retrieved": []
+      },
+      {
+        "query": "Write me a Python function to reverse a list",
+        "retrieved": []
+      },
+      {
+        "query": "Give me a recipe for banana bread",
+        "retrieved": []
+      },
+      {
+        "query": "Who won the football match last night?",
+        "retrieved": []
+      },
+      {
+        "query": "hi",
+        "retrieved": [
+          {
+            "documentId": "wellness-001",
+            "score": 0.7716
+          },
+          {
+            "documentId": "wellness-002",
+            "score": 0.7013
+          },
+          {
+            "documentId": "wellness-005",
+            "score": 0.5937
+          }
+        ]
+      }
+    ]
+  }
+]

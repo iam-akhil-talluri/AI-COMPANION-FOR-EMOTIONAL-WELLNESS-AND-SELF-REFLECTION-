@@ -59,9 +59,22 @@ If retrieval fails, the companion still replies, just without passages. Messages
 
 To add a resource, add a document with `documentId`, `title`, `sourceUrl`, `approved` and `text` (paragraphs separated by blank lines). Only `approved: true` documents are indexed.
 
+### OpenAI File Search (alternative retrieval backend)
+
+Set `RAG_BACKEND=openai_file_search` to retrieve passages from a hosted OpenAI vector store instead of `rag_index.json`. The prompt, safety layers and `sources` work the same way.
+
+```bash
+python -m app.file_search sync     # upload approved docs to the vector store (re-run after editing the knowledge base)
+python -m app.file_search status
+python -m app.eval_retrieval       # retrieval accuracy for both backends
+```
+
+Details, configuration and evaluation results: [`docs/FILE_SEARCH.md`](../docs/FILE_SEARCH.md).
+
 ## Tests
 
 ```powershell
 pytest                                   # offline: routing, safety, RAG
 $env:RUN_LIVE_TESTS="1"; pytest tests/test_ai_behavior.py -v   # real OpenAI API
+$env:RUN_LIVE_TESTS="1"; pytest tests/test_file_search_live.py -v -s   # File Search + model, end to end
 ```
