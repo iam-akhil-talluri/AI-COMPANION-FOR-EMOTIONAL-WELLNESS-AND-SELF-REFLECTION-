@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wellness Companion</title>
+<style>
+  :root {
+    --bg: #f6f4ef; --surface: #ffffff; --surface-2: #efece4; --text: #24231f; --muted: #6c6a62;
+    --border: #e1ddd2; --accent: #3f7a62; --accent-text: #ffffff; --user: #3f7a62; --user-text: #ffffff;
+    --concern-bg: #fbeee9; --concern-border: #e3b4a3; --concern-text: #7a2f17;
+    --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171816; --surface: #212320; --surface-2: #2a2c28; --text: #e9e7e0; --muted: #a09e95;
+      --border: #363833; --accent: #74b597; --accent-text: #10241b; --user: #2f5e4a; --user-text: #eef6f1;
+      --concern-bg: #3a231b; --concern-border: #6b3a29; --concern-text: #f2c4b2;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; justify-content: center;
+  }
+  .app { width: 100%; max-width: 760px; height: 100%; display: flex; flex-direction: column; padding: 0 16px; }
+  header { display: flex; align-items: center; gap: 12px; padding: 18px 0 14px; border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; letter-spacing: -.01em; }
+  header .meta { color: var(--muted); font-size: 13px; }
+  header .spacer { flex: 1; }
+  button { font: inherit; cursor: pointer; }
+  .ghost { background: none; border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 6px 12px; font-size: 14px; }
+  .ghost:hover { background: var(--surface-2); }
+  #log { flex: 1; overflow-y: auto; padding: 20px 0; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 85%; padding: 12px 16px; border-radius: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .user { align-self: flex-end; background: var(--user); color: var(--user-text); border-bottom-right-radius: 4px; }
+  .bot { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); border-bottom-left-radius: 4px; }
+  .bot.concern { background: var(--concern-bg); border-color: var(--concern-border); color: var(--concern-text); }
+  .bot.error { color: var(--muted); font-style: italic; }
+  .sources { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 12px; background: var(--surface-2); color: var(--muted); border-radius: 999px; padding: 3px 10px; text-decoration: none; }
+  a.chip:hover { color: var(--text); }
+  details.passages { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  details.passages summary { cursor: pointer; }
+  .passage { border-left: 3px solid var(--border); padding: 4px 10px; margin: 8px 0; }
+  .passage b { color: var(--text); font-weight: 600; }
+  .passage .used { color: var(--accent); font-weight: 600; }
+  .empty { margin: auto; text-align: center; color: var(--muted); max-width: 420px; }
+  .empty h2 { color: var(--text); font-size: 20px; font-weight: 600; margin: 0 0 6px; }
+  .suggestions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
+  .suggestions button { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 999px; padding: 7px 14px; font-size: 14px; }
+  .suggestions button:hover { border-color: var(--accent); }
+  .typing { color: var(--muted); font-size: 14px; align-self: flex-start; padding: 0 4px; }
+  form { display: flex; gap: 10px; padding: 14px 0 10px; border-top: 1px solid var(--border); }
+  textarea {
+    flex: 1; resize: none; font: inherit; color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 12px; padding: 11px 14px; min-height: 48px; max-height: 160px;
+  }
+  textarea:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .send { background: var(--accent); color: var(--accent-text); border: none; border-radius: 12px; padding: 0 20px; font-weight: 600; }
+  .send:disabled { opacity: .5; cursor: default; }
+  .note { color: var(--muted); font-size: 12px; text-align: center; padding-bottom: 12px; }
+  @media (max-width: 520px) { .msg { max-width: 92%; } header .meta { display: none; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Wellness Companion</h1>
+    <span class="meta" id="meta"></span>
+    <span class="spacer"></span>
+    <button class="ghost" id="reset" type="button">New conversation</button>
+  </header>
+
+  <main id="log" aria-live="polite">
+    <div class="empty" id="empty">
+      <h2>How are you feeling today?</h2>
+      <div>Share what's on your mind. Suggestions come from reviewed wellness resources.</div>
+      <div class="suggestions">
+        <button type="button">I'm stressed about my exams</button>
+        <button type="button">I can't sleep, my mind keeps racing</button>
+        <button type="button">I feel lonely lately</button>
+      </div>
+    </div>
+  </main>
+
+  <form id="form">
+    <textarea id="input" rows="1" placeholder="Type a message…" aria-label="Message" maxlength="4000"></textarea>
+    <button class="send" id="send" type="submit">Send</button>
+  </form>
+  <div class="note">An AI companion, not a therapist. In an emergency, contact your local emergency number.</div>
+</div>
+
+<script>
+const log = document.getElementById("log");
+const input = document.getElementById("input");
+const send = document.getElementById("send");
+let sessionId = null;
+try { sessionId = sessionStorage.getItem("sessionId"); } catch (e) {}
+
+fetch("/api/health").then(r => r.json()).then(h => {
+  document.getElementById("meta").textContent =
+    `${h.documents} resources · ${h.backend === "openai_file_search" ? "OpenAI File Search" : "local vector DB"}` +
+    (h.keyConfigured ? "" : " · API key missing");
+}).catch(() => {});
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function addMessage(role, text, extra = {}) {
+  document.getElementById("empty")?.remove();
+  const m = el("div", `msg ${role}${extra.status ? " " + extra.status : ""}`, text);
+  if (extra.sources?.length) {
+    const s = el("div", "sources");
+    for (const src of extra.sources) {
+      const c = src.sourceUrl ? Object.assign(el("a", "chip", src.title), { href: src.sourceUrl, target: "_blank", rel: "noopener" })
+                              : el("span", "chip", src.title);
+      s.append(c);
+    }
+    m.append(s);
+  }
+  if (extra.passages?.length) {
+    const used = new Set((extra.sources || []).map(s => s.documentId));
+    const d = el("details", "passages");
+    d.append(el("summary", "", `Retrieved passages (${extra.passages.length})`));
+    for (const p of extra.passages) {
+      const box = el("div", "passage");
+      const head = el("div");
+      head.append(el("b", "", p.title), ` · score ${p.score}`);
+      if (used.has(p.document_id)) head.append(" · ", el("span", "used", "used"));
+      box.append(head, el("div", "", p.text.length > 280 ? p.text.slice(0, 280) + "…" : p.text));
+      d.append(box);
+    }
+    m.append(d);
+  }
+  log.append(m);
+  log.scrollTop = log.scrollHeight;
+}
+
+async function submit(text) {
+  text = text.trim();
+  if (!text) return;
+  addMessage("user", text);
+  input.value = ""; autosize();
+  send.disabled = true;
+  const typing = el("div", "typing", "Thinking…");
+  log.append(typing); log.scrollTop = log.scrollHeight;
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text, session_id: sessionId }),
+    });
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    sessionId = data.session_id;
+    try { sessionStorage.setItem("sessionId", sessionId); } catch (e) {}
+    addMessage("bot", data.message, data);
+  } catch (e) {
+    addMessage("bot", "Sorry, I couldn't reach the server. Please try again.", { status: "error" });
+  } finally {
+    typing.remove();
+    send.disabled = false;
+    input.focus();
+  }
+}
+
+function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 160) + "px"; }
+input.addEventListener("input", autosize);
+input.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (!send.disabled) submit(input.value); }
+});
+document.getElementById("form").addEventListener("submit", e => { e.preventDefault(); submit(input.value); });
+document.querySelectorAll(".suggestions button").forEach(b => b.addEventListener("click", () => submit(b.textContent)));
+document.getElementById("reset").addEventListener("click", async () => {
+  if (sessionId) fetch("/api/reset", { method: "POST", headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ session_id: sessionId }) }).catch(() => {});
+  sessionId = null;
+  try { sessionStorage.removeItem("sessionId"); } catch (e) {}
+  location.reload();
+});
+</script>
+</body>
+</html>
