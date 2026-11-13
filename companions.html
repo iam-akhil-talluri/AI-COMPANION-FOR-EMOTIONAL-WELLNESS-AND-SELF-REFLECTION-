@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Companion AI</title>
+  <style>
+    :root {
+      --bg: #f6f5f2; --card: #ffffff; --text: #1f2328; --muted: #646b73;
+      --border: #dedbd4; --accent: #2f7d6d; --accent-text: #ffffff;
+      --danger: #b4392f; --chip: #eceae4;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #16181b; --card: #1f2226; --text: #e8e6e1; --muted: #9aa0a6;
+        --border: #33373c; --accent: #5cb8a4; --accent-text: #0e1a17;
+        --danger: #e0786e; --chip: #2a2e33;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    main { max-width: 960px; margin: 0 auto; padding: 32px 16px 64px; }
+    h1 { font-size: 24px; margin: 0 0 4px; }
+    .sub { color: var(--muted); margin: 0 0 24px; }
+    .layout { display: grid; grid-template-columns: 320px 1fr; gap: 24px; align-items: start; }
+    @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+    h2 { font-size: 16px; margin: 0 0 16px; }
+    label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+    input[type=text], select, textarea {
+      width: 100%; padding: 8px 10px; font: inherit; color: var(--text);
+      background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    }
+    textarea { min-height: 90px; resize: vertical; }
+    .row { display: grid; grid-template-columns: 72px 1fr; gap: 10px; }
+    .check { display: flex; align-items: center; gap: 8px; margin-top: 14px; color: var(--text); font-size: 14px; }
+    .actions { display: flex; gap: 8px; margin-top: 18px; }
+    button {
+      font: inherit; padding: 8px 14px; border-radius: 6px; cursor: pointer;
+      border: 1px solid var(--border); background: var(--card); color: var(--text);
+    }
+    button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+    button.danger { color: var(--danger); }
+    button:disabled { opacity: .6; cursor: default; }
+    .error { color: var(--danger); font-size: 13px; margin-top: 10px; min-height: 1em; }
+    .toolbar { display: flex; gap: 10px; margin-bottom: 14px; }
+    .toolbar input { flex: 1; }
+    .list { display: grid; gap: 12px; }
+    .item { display: grid; grid-template-columns: 48px 1fr auto; gap: 14px; align-items: start; }
+    .item.inactive { opacity: .6; }
+    .avatar {
+      width: 48px; height: 48px; border-radius: 50%; background: var(--chip);
+      display: grid; place-items: center; font-size: 22px; overflow: hidden;
+    }
+    .name { font-weight: 600; }
+    .meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; }
+    .chip { background: var(--chip); border-radius: 999px; padding: 1px 9px; font-size: 12px; color: var(--muted); }
+    .desc { color: var(--muted); font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+    .item-actions { display: flex; flex-direction: column; gap: 6px; }
+    .item-actions button { padding: 4px 10px; font-size: 13px; }
+    .empty { color: var(--muted); text-align: center; padding: 32px 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Companion AI</h1>
+    <p class="sub">Create and manage your companions.</p>
+
+    <div class="layout">
+      <form class="card" id="form" autocomplete="off">
+        <h2 id="form-title">New companion</h2>
+        <div class="row">
+          <div>
+            <label for="avatar">Avatar</label>
+            <input type="text" id="avatar" maxlength="8" placeholder="🌿" />
+          </div>
+          <div>
+            <label for="name">Name *</label>
+            <input type="text" id="name" maxlength="60" required />
+          </div>
+        </div>
+        <label for="role">Role</label>
+        <select id="role">
+          <option>Friend</option><option>Listener</option><option>Coach</option>
+          <option>Mentor</option><option>Journal guide</option>
+        </select>
+        <label for="personality">Personality</label>
+        <select id="personality">
+          <option>Friendly</option><option>Calm</option><option>Encouraging</option>
+          <option>Thoughtful</option><option>Playful</option>
+        </select>
+        <label for="description">Description</label>
+        <textarea id="description" maxlength="1000" placeholder="How should this companion talk with you?"></textarea>
+        <label class="check"><input type="checkbox" id="active" checked /> Active</label>
+        <div class="error" id="error"></div>
+        <div class="actions">
+          <button type="submit" class="primary" id="submit">Create</button>
+          <button type="button" id="cancel" hidden>Cancel</button>
+        </div>
+      </form>
+
+      <section>
+        <div class="toolbar">
+          <input type="text" id="search" placeholder="Search companions…" />
+        </div>
+        <div class="list" id="list"><p class="empty">Loading…</p></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const API = '/api/companions';
+    const $ = id => document.getElementById(id);
+    const form = $('form'), list = $('list');
+    let companions = [];
+    let editingId = null;
+
+    async function request(method, url, body) {
+      const res = await fetch(url, {
+        method,
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (res.status === 204) return null;
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // Node server returns {error}, FastAPI returns {detail} (string or validation list)
+        let msg = data.error || data.detail || `Request failed (${res.status})`;
+        if (Array.isArray(msg)) msg = msg.map(d => d.msg.replace(/^Value error, /, '')).join('; ');
+        throw new Error(msg);
+      }
+      return data;
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function render() {
+      const q = $('search').value.trim().toLowerCase();
+      const shown = companions
+        .filter(c => !q || [c.name, c.role, c.personality, c.description]
+          .some(v => (v || '').toLowerCase().includes(q)))
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+
+      if (!shown.length) {
+        list.innerHTML = `<p class="empty">${companions.length ? 'No matches.' : 'No companions yet. Create one to get started.'}</p>`;
+        return;
+      }
+      list.innerHTML = shown.map(c => `
+        <article class="card item${c.active ? '' : ' inactive'}">
+          <div class="avatar">${escapeHtml(c.avatar) || escapeHtml(c.name.charAt(0).toUpperCase())}</div>
+          <div>
+            <div class="name">${escapeHtml(c.name)}</div>
+            <div class="meta">
+              <span class="chip">${escapeHtml(c.role)}</span>
+              <span class="chip">${escapeHtml(c.personality)}</span>
+              ${c.active ? '' : '<span class="chip">Inactive</span>'}
+            </div>
+            ${c.description ? `<div class="desc">${escapeHtml(c.description)}</div>` : ''}
+          </div>
+          <div class="item-actions">
+            <button data-edit="${c.id}">Edit</button>
+            <button class="danger" data-delete="${c.id}">Delete</button>
+          </div>
+        </article>`).join('');
+    }
+
+    function setSelect(el, value) {
+      if (![...el.options].some(o => o.value === value)) el.add(new Option(value));
+      el.value = value;
+    }
+
+    function resetForm() {
+      editingId = null;
+      form.reset();
+      $('form-title').textContent = 'New companion';
+      $('submit').textContent = 'Create';
+      $('cancel').hidden = true;
+      $('error').textContent = '';
+    }
+
+    function startEdit(c) {
+      editingId = c.id;
+      $('avatar').value = c.avatar || '';
+      $('name').value = c.name;
+      setSelect($('role'), c.role);
+      setSelect($('personality'), c.personality);
+      $('description').value = c.description || '';
+      $('active').checked = c.active;
+      $('form-title').textContent = 'Edit companion';
+      $('submit').textContent = 'Save';
+      $('cancel').hidden = false;
+      $('error').textContent = '';
+      $('name').focus();
+    }
+
+    async function load() {
+      try {
+        companions = await request('GET', API);
+        render();
+      } catch (e) {
+        list.innerHTML = `<p class="empty">Couldn't load companions: ${escapeHtml(e.message)}</p>`;
+      }
+    }
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const body = {
+        name: $('name').value.trim(),
+        avatar: $('avatar').value.trim(),
+        role: $('role').value,
+        personality: $('personality').value,
+        description: $('description').value.trim(),
+        active: $('active').checked,
+      };
+      if (!body.name) { $('error').textContent = 'Name is required'; return; }
+      $('submit').disabled = true;
+      try {
+        if (editingId) {
+          const updated = await request('PUT', `${API}/${editingId}`, body);
+          companions = companions.map(c => c.id === updated.id ? updated : c);
+        } else {
+          companions.push(await request('POST', API, body));
+        }
+        resetForm();
+        render();
+      } catch (err) {
+        $('error').textContent = err.message;
+      } finally {
+        $('submit').disabled = false;
+      }
+    });
+
+    $('cancel').addEventListener('click', resetForm);
+    $('search').addEventListener('input', render);
+
+    list.addEventListener('click', async e => {
+      const editId = e.target.dataset.edit, deleteId = e.target.dataset.delete;
+      if (editId) startEdit(companions.find(c => c.id === editId));
+      if (deleteId) {
+        e.target.disabled = true;
+        try {
+          await request('DELETE', `${API}/${deleteId}`);
+          companions = companions.filter(c => c.id !== deleteId);
+          if (editingId === deleteId) resetForm();
+          render();
+        } catch (err) {
+          e.target.disabled = false;
+          $('error').textContent = err.message;
+        }
+      }
+    });
+
+    load();
+  </script>
+</body>
+</html>
