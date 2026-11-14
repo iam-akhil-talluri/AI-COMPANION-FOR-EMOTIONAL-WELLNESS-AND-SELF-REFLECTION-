@@ -86,7 +86,30 @@ python -m src.retriever "I can't sleep"                 # show retrieved passage
 python -m src.rag_pipeline "I'm stressed about exams"   # one full RAG turn
 pytest                                                  # 20 offline tests
 $env:RUN_LIVE_TESTS="1"; pytest tests/test_live.py -v  # live: breathing techniques are not blended
+python -m src.evaluate --out docs/evaluation_results.json  # full evaluation (real API)
 ```
+
+## Evaluation
+
+`python -m src.evaluate` runs both backends against the real API. Full results are in `docs/evaluation_results.json`.
+
+- **Retrieval:** 20 labelled questions (two per document, phrased as a user would say them) and 5 off-topic or greeting messages.
+- **End to end:** full chat turns, checking status classification, whether `sources` is accurate, crisis escalation and breathing technique blending.
+
+Latest results (2026-11-13), with the configured thresholds:
+
+| Measure | Local | OpenAI File Search |
+|---|---|---|
+| Hit@1 / Hit@3 | 0.95 / 1.00 | 0.85 / 1.00 |
+| MRR | 0.975 | 0.925 |
+| Off-topic messages retrieving anything | 0/5 | 1/5 ("hi") |
+| Expected resource in `sources` | 20/20 | 20/20 |
+| Source precision | 0.95 | 0.95 |
+| Off-topic declined / greeting with no sources | 4/4 · 1/1 | 4/4 · 1/1 |
+| Crisis messages escalated | 4/4 | 4/4 |
+| Breathing replies with blended techniques | 0/10 | 0/10 |
+
+Every top-1 miss is a close call between related documents (for example sleep vs. grounding), and the expected document is always in the top 3.
 
 ## Thresholds
 

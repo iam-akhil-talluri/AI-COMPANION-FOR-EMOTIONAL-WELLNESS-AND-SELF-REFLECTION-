@@ -19,7 +19,7 @@ BREATHING_QUESTIONS = [
 def is_blended(text: str) -> bool:
     """Box breathing's hold step combined with extended exhale's out-for-six."""
     t = text.lower()
-    hold = re.search(r"\bhold", t)
+    hold = re.search(r"\bhold(ing)?\s+(it\s+|your\s+breath\s+)?(for\s+)?(a\s+count\s+of\s+)?(four|4)\b", t)
     out_six = re.search(r"(out|exhal\w*)[^.]{0,40}(six|6)|(six|6)[^.]{0,25}(out|exhal)", t)
     return bool(hold and out_six)
 
