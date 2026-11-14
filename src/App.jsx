@@ -840,7 +840,7 @@ function App() {
                 // React → FastAPI → Safety/Moderation → clear/concern/error
                 // ============================================================
                 try {
-                  const response = await sendMessageToBackend(userMessage)
+                  const response = await sendMessageToBackend(userMessage, sessionId, messages)
 
                   setSafetyChecking(false)
                   setSafetyStatus(response.status)
@@ -1111,7 +1111,11 @@ function App() {
 
                 try {
                   const response =
-                    await sendMessageToBackend(userMessage)
+                    await sendMessageToBackend(
+                      userMessage,
+                      selectedSession ? selectedSession.id : null,
+                      reflectionMessages
+                    )
 
                   if (response.status === 'concern') {
                     setCurrentScreen('support-resources')
@@ -2522,7 +2526,11 @@ function App() {
 
                 try {
                   const response =
-                    await sendMessageToBackend(userMessage)
+                    await sendMessageToBackend(
+                      userMessage,
+                      selectedSession ? selectedSession.id : null,
+                      continueMessages
+                    )
 
                   if (response.status === 'concern') {
                     setCurrentScreen('support-resources')

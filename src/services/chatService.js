@@ -1,49 +1,54 @@
 /*
   FRONTEND SERVICE
 
-  This file simulates the response from our future FastAPI backend.
-  Later, we will replace this mock function with a real API request.
+  Sends chat messages to the FastAPI backend (POST /chat).
 
-  The backend will be responsible for safety screening,
-  scope classification, and generating wellness responses.
+  The backend is responsible for safety screening,
+  scope classification, and generating wellness responses
+  grounded in approved resources (RAG).
+
+  Response: { status, message, session_id, sources }
+    status: 'ok' | 'out_of_scope' | 'concern' | 'error'
+    sources: approved resources the reply drew on
+             [{ documentId, title, sourceUrl }]
+
+  Set VITE_API_URL in a frontend .env file if the backend is not
+  running on http://localhost:8000.
 */
 
-export async function sendMessageToBackend(userMessage) {
-  // MOCK ONLY: Simulate a short backend response delay.
-  await new Promise((resolve) => setTimeout(resolve, 500))
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-  const text = userMessage.toLowerCase()
+const ERROR_RESPONSE = {
+  status: 'error',
+  message: 'Sorry, I could not respond just now. Please try again.',
+  sources: []
+}
 
-  // MOCK TEST: A direct recipe request is out of scope.
-  if (
-    text.includes('recipe') ||
-    text.includes('how do i cook')
-  ) {
-    return {
-      status: 'out_of_scope',
-      message:
-        "I'm here to support emotional wellness, self-reflection, and coping strategies. I can't help with recipes, but we could explore how you're feeling."
+// sessionId: keeps one conversation's history together on the backend.
+// history: messages already shown in this chat ({ role, text }), so the
+// backend can pick up a restored session it has not seen before.
+export async function sendMessageToBackend(userMessage, sessionId = null, history = []) {
+  try {
+    const response = await fetch(`${API_URL}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: userMessage,
+        session_id: sessionId === null || sessionId === undefined ? null : String(sessionId),
+        history: history
+          .filter((m) => m && (m.role === 'user' || m.role === 'assistant'))
+          .map((m) => ({ role: m.role, text: m.text || '' }))
+          .slice(-100)
+      })
+    })
+
+    if (!response.ok) {
+      return ERROR_RESPONSE
     }
-  }
 
-  // MOCK TEST: An emotional message mentioning food stays in scope.
-  if (
-    text.includes('stressed') ||
-    text.includes('stress') ||
-    text.includes('upset') ||
-    text.includes('sad')
-  ) {
-    return {
-      status: 'ok',
-      message:
-        "It sounds like you're feeling stressed. Would you like to talk about what's making today difficult?"
-    }
-  }
-
-  // MOCK DEFAULT: Replace this with the real AI response.
-  return {
-    status: 'ok',
-    message:
-      'What has been on your mind today?'
+    return await response.json()
+  } catch {
+    // Backend not running or network unavailable.
+    return ERROR_RESPONSE
   }
 }
