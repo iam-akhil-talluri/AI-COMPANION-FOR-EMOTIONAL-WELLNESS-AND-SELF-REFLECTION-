@@ -1,0 +1,75 @@
+{
+  "_note": "Starter statements written for this project. Before deployment, have the team review each document, replace or add vetted resources (set title and sourceUrl to the real resource), and set approved=false on anything not yet reviewed. Only approved documents are indexed. Separate paragraphs with a blank line (\\n\\n) - that is where chunks are split.",
+  "documents": [
+    {
+      "documentId": "wellness-001",
+      "title": "Slow Breathing for Stress",
+      "sourceUrl": "",
+      "approved": true,
+      "text": "When stress or anxiety rises, breathing often becomes fast and shallow. Slowing the breath down, especially making the out-breath longer than the in-breath, can help the body settle.\n\nBox breathing: breathe in through the nose for a count of four, hold for four, breathe out slowly for four, and hold for four. Repeat for one to three minutes.\n\nExtended exhale: breathe in for a count of four and out for a count of six. Placing a hand on the belly and feeling it rise and fall can help keep attention on the breath.\n\nBreathing exercises are a short-term calming tool. If anxiety is frequent or overwhelming, talking with a doctor, counsellor, or trusted person is a good next step."
+    },
+    {
+      "documentId": "wellness-002",
+      "title": "5-4-3-2-1 Grounding",
+      "sourceUrl": "",
+      "approved": true,
+      "text": "Grounding exercises bring attention back to the present moment when thoughts are racing or feelings are overwhelming.\n\nThe 5-4-3-2-1 technique: notice five things you can see, four things you can touch, three things you can hear, two things you can smell, and one thing you can taste. Saying them out loud or writing them down can make the exercise more effective.\n\nOther simple grounding ideas: press your feet into the floor and notice the contact, hold something cold, or describe an object in the room in detail."
+    },
+    {
+      "documentId": "wellness-003",
+      "title": "Journaling Prompts for Self-Reflection",
+      "sourceUrl": "",
+      "approved": true,
+      "text": "Writing about thoughts and feelings can help make sense of them and notice patterns over time. There is no right way to journal; a few honest sentences are enough.\n\nPrompts to try: What is taking up most of my mental energy right now? What emotion am I feeling, and where do I notice it in my body? What is one thing that went okay today? What would I say to a friend who was feeling the way I feel?\n\nA short daily check-in can be as simple as rating your mood from 1 to 10 and writing one sentence about why."
+    },
+    {
+      "documentId": "wellness-004",
+      "title": "Coping with Exam and Study Stress",
+      "sourceUrl": "",
+      "approved": true,
+      "text": "Some pressure before exams is normal, but it can build up into worry that makes studying harder. Breaking revision into small, specific tasks makes the workload feel more manageable.\n\nHelpful habits include studying in focused blocks of 25 to 50 minutes with short breaks, keeping a regular sleep schedule, eating regular meals, and moving your body each day.\n\nWhen worries spiral, it can help to write them down and ask: Is this something I can act on now? If yes, choose one small step. If not, try setting the worry aside for a planned worry time later.\n\nTalking to a teacher, tutor, classmate, or student support service about feeling overwhelmed is a sign of strength, not weakness."
+    },
+    {
+      "documentId": "wellness-005",
+      "title": "Sleep and Emotional Wellbeing",
+      "sourceUrl": "",
+      "approved": true,
+      "text": "Sleep and mood affect each other: stress can make it hard to sleep, and poor sleep can make emotions feel more intense.\n\nHabits that support sleep include going to bed and waking at similar times each day, limiting screens and caffeine in the hours before bed, and keeping the bedroom dark and quiet.\n\nIf your mind is busy at night, try writing a short list of tomorrow's tasks or worries before bed so they feel held somewhere other than your head.\n\nOngoing sleep problems are worth mentioning to a doctor."
+    },
+    {
+      "documentId": "wellness-006",
+      "title": "Loneliness and Connection",
+      "sourceUrl": "",
+      "approved": true,
+      "text": "Feeling lonely is a common human experience and does not mean something is wrong with you. Loneliness is about the quality of connection, not just the number of people around you.\n\nSmall steps can help: sending a message to someone you have not spoken to in a while, joining a club, class, or group built around an interest, volunteering, or spending time in shared spaces like libraries or parks.\n\nReaching out can feel uncomfortable at first. Starting with low-pressure contact, such as a short message or a shared activity, often makes it easier."
+    },
+    {
+      "documentId": "wellness-007",
+      "title": "Practising Self-Compassion",
+      "sourceUrl": "",
+      "approved": true,
+      "text": "Self-compassion means treating yourself with the same kindness you would offer a friend who is struggling. It is linked with lower stress and greater resilience.\n\nThree parts of self-compassion: noticing that you are having a hard time, remembering that struggling is part of being human, and offering yourself a kind word or gesture.\n\nWhen you notice harsh self-talk, try asking: Would I say this to someone I care about? What would be a kinder and more accurate way to put it?"
+    },
+    {
+      "documentId": "wellness-008",
+      "title": "Reaching Out for Support",
+      "sourceUrl": "",
+      "approved": true,
+      "text": "Talking to someone you trust, such as a friend, family member, teacher, or colleague, can lighten the weight of difficult feelings. You do not need to have the right words; saying that you are having a hard time is enough to start.\n\nProfessional support, such as a doctor, counsellor, or therapist, can help when difficult feelings last for weeks, get in the way of daily life, or feel too big to manage alone.\n\nAn AI companion can support reflection, but it is not a replacement for professional care or for people in your life."
+    },
+    {
+      "documentId": "wellness-009",
+      "title": "Understanding and Naming Emotions",
+      "sourceUrl": "",
+      "approved": true,
+      "text": "Putting a name to a feeling, sometimes called affect labelling, can reduce its intensity and make it easier to decide what you need.\n\nTry going beyond broad words like good or bad. For example, bad might really be disappointed, embarrassed, lonely, frustrated, or tired.\n\nEmotions often carry information: anger can signal that a boundary has been crossed, sadness can signal loss, and anxiety can signal that something feels uncertain or important."
+    },
+    {
+      "documentId": "wellness-010",
+      "title": "Managing Relationship Conflict",
+      "sourceUrl": "",
+      "approved": true,
+      "text": "Disagreements are a normal part of close relationships. How a conflict is handled often matters more than the disagreement itself.\n\nHelpful approaches include taking a short break if emotions are running high, using I statements such as I felt hurt when this happened instead of you always, and listening to understand rather than to reply.\n\nIt can help to reflect on what you need from the conversation: to be heard, to find a solution, or to repair the connection.\n\nIf a relationship involves fear, control, or harm, that is not ordinary conflict, and reaching out for support is important."
+    }
+  ]
+}
