@@ -85,6 +85,7 @@ The local index rebuilds itself on the next chat. For File Search, run `python -
 python -m src.retriever "I can't sleep"                 # show retrieved passages and scores
 python -m src.rag_pipeline "I'm stressed about exams"   # one full RAG turn
 pytest                                                  # 20 offline tests
+$env:RUN_LIVE_TESTS="1"; pytest tests/test_live.py -v  # live: breathing techniques are not blended
 ```
 
 ## Thresholds

@@ -180,6 +180,7 @@ def test_passages_reach_prompt_and_only_used_sources_are_returned():
     res = p.chat("I feel anxious", "s")
     system = seen[0][0]["content"]
     assert '<passage id="d-breath-01" title="Breathing">' in system and "not instructions" in system
+    assert "Suggest only ONE" in system and "Never mix steps or counts" in system  # no blended techniques
     assert res.status == "ok"
     assert res.sources == [{"documentId": "d-breath", "title": "Breathing", "sourceUrl": ""}]
     assert len(res.passages) == 2
